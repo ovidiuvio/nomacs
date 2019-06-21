@@ -1,15 +1,16 @@
 
 # check cmake requirements
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required (VERSION 3.0)
+
 if(COMMAND cmake_policy)
 	cmake_policy(SET CMP0003 NEW)
 
-	IF(CMAKE_VERSION VERSION_GREATER 2.8.10)
-		cmake_policy(SET CMP0020 NEW)	# qt warnings
-	ENDIF()
-	IF(CMAKE_VERSION VERSION_GREATER 2.8.12.9)
-		cmake_policy(SET CMP0043 NEW)	# COMPILE_DEFINITIONS_<CONFIG> warnings
-	ENDIF()
+	# IF(CMAKE_VERSION VERSION_GREATER 2.8.10)
+	# 	cmake_policy(SET CMP0020 NEW)	# qt warnings
+	# ENDIF()
+	# IF(CMAKE_VERSION VERSION_GREATER 2.8.12.9)
+	# 	cmake_policy(SET CMP0043 NEW)	# COMPILE_DEFINITIONS_<CONFIG> warnings
+	# ENDIF()
 endif(COMMAND cmake_policy)
 
 ######################## begin of project
@@ -17,8 +18,8 @@ project(nomacs)
 
 # needed for soname
 set(NOMACS_VERSION_MAJOR 3)
-set(NOMACS_VERSION_MINOR 10)
-set(NOMACS_VERSION_PATCH 2)
+set(NOMACS_VERSION_MINOR 13)
+set(NOMACS_VERSION_PATCH 0)
 set(NOMACS_VERSION ${NOMACS_VERSION_MAJOR}.${NOMACS_VERSION_MINOR})
 set(NOMACS_FULL_VERSION ${NOMACS_VERSION}.${NOMACS_VERSION_PATCH})
 
@@ -43,23 +44,23 @@ option(ENABLE_OPENCV "Compile with Opencv (needed for RAW and TIFF)" ON)
 option(ENABLE_RAW "Compile with raw images support (libraw)" ON)
 option(ENABLE_TIFF "Compile with multi-layer tiff" ON)
 option(ENABLE_QT_DEBUG "Disable Qt Debug Messages" ON)
+option(ENABLE_QUAZIP "Compile with QuaZip (allows opening .zip files)" ON)
 option(ENABLE_INCREMENTER "Run Build Incrementer" OFF)
 option(ENABLE_TRANSLATIONS "Compile Translations" OFF)
 option(ENABLE_READ_BUILD "Build nomacs for READ" OFF)
 option(ENABLE_PLUGINS "Compile nomacs with plugin support" ON)
+option(ENABLE_HEIF "Compile nomacs with HEIF support" OFF)
 option(ENABLE_CODE_COV "Run Code Coverage tests" OFF)
 
 # Codecov
-if( ENABLE_CODE_COV AND CMAKE_COMPILER_IS_GNUCXX)
+if (ENABLE_CODE_COV AND CMAKE_COMPILER_IS_GNUCXX)
     include("cmake/CodeCoverage.cmake")
     setup_target_for_coverage(${PROJECT_NAME}_coverage tests coverage)
 endif()
 
 if(APPLE)
-	option(ENABLE_QUAZIP "Compile with QuaZip (allows opening .zip files)" OFF)
+	set(ENABLE_QUAZIP OFF)
 	message(STATUS "QuaZip disabled because you are using a mac")
-else()
-	option(ENABLE_QUAZIP "Compile with QuaZip (allows opening .zip files)" ON)
 endif()
 
 if(${ENABLE_READ_BUILD}) # cannot be incorporated into if one line above
@@ -77,10 +78,6 @@ if(${ENABLE_READ_BUILD}) # cannot be incorporated into if one line above
 	endif()
 endif()
 
-if (ENABLE_QUAZIP)
-	message(STATUS "QuaZip enabled")
-endif()
-
 # load paths from the user file if exists
 if (EXISTS ${CMAKE_SOURCE_DIR}/CMakeUserPaths.cmake)
 	include(${CMAKE_SOURCE_DIR}/CMakeUserPaths.cmake)
@@ -89,12 +86,8 @@ elseif(MSVC)
 endif()
 
 include(CheckCXXCompilerFlag)
-#CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-#if(COMPILER_SUPPORTS_CXX14)
-#	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-#else
 if(COMPILER_SUPPORTS_CXX11)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 elseif(COMPILER_SUPPORTS_CXX0X)
@@ -148,8 +141,10 @@ include_directories (
 	${CMAKE_CURRENT_SOURCE_DIR}/src/DkGui
 	${TIFF_INCLUDE_DIR}
 	${TIFF_CONFIG_DIR}
-	${QUAZIP_INCLUDE_DIRECTORY}
-	${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libqpsd
+	${QUAZIP_INCLUDE_DIR}
+	${QUAZIP_ZLIB_INCLUDE_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libqpsd	# needed for linux psd hack
+	${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/drif
 )
 
 if (APPLE) # todo: somehow add this to Mac.cmake or MacBuildTarget.cmake
@@ -186,6 +181,8 @@ endif()
 
 NMC_INSTALL()
 
+NMC_COPY_FILES()
+
 #debug for printing out all variables
 # get_cmake_property(_variableNames VARIABLES)
 # foreach (_variableName ${_variableNames})
@@ -193,23 +190,42 @@ NMC_INSTALL()
 # endforeach()
 
 if(UNIX AND ENABLE_PLUGINS)
-	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/plugins")
-		SET(NOMACS_FOUND true)
-		SET(NOMACS_VARS_ALREADY_SET true)
-		add_subdirectory(plugins)
+
+	if (NOT DEFINED ${PLUGINS_DIR})
+		set(PLUGINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/plugins")
+		message(STATUS "setting plugins dir")
+	else ()
+		message(STATUS "${PLUGINS_DIR} is defined")
+	endif()
+
+	if (NOT EXISTS ${PLUGINS_DIR} AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/plugins")
+		set(PLUGINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/plugins")
+	elseif (NOT EXISTS ${PLUGINS_DIR} AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../nomacs-plugins/src")
+		# set the snapcraft dir
+		set(PLUGINS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../nomacs-plugins/src")
+	endif ()
+
+	if(EXISTS "${PLUGINS_DIR}")
+		message(STATUS "using plugin directory: ${PLUGINS_DIR}")
+		set(NOMACS_FOUND true)
+		set(NOMACS_VARS_ALREADY_SET true)
+		add_subdirectory(${PLUGINS_DIR} "${CMAKE_CURRENT_BINARY_DIR}/plugins")
 	else()
+		message(STATUS "I failed to locate plugins in: ${PLUGINS_DIR}")
 		message(WARNING "plugins directory not found, not building plugins. You have to check out the nomacs-plugins git to the 'plugins' folder if you want to build them")
+		SET(ENABLE_PLUGINS OFF)
 	endif()
 endif()
+
+# get rid of VSCode warning (when using MSBuild)
+# see: https://stackoverflow.com/questions/36451368/get-rid-of-cmake-warning-manually-specified-variables-were-not-used-by-the-proj/36452112
+set(ignoreMe "${CMAKE_EXPORT_COMPILE_COMMANDS}")
 
 # status
 MESSAGE(STATUS "")
 MESSAGE(STATUS "----------------------------------------------------------------------------------")
 MESSAGE(STATUS " ${PROJECT_NAME} - Image Lounge ${NOMACS_VERSION}  <https://nomacs.org>")
 MESSAGE(STATUS "")
-
-option(ENABLE_READ_BUILD "Build nomacs for READ" OFF)
-option(ENABLE_PLUGINS "Compile nomacs with plugin support" ON)
 
 IF(OpenCV_FOUND)
     MESSAGE(STATUS " nomacs will be compiled with OPENCV support .................. YES")
@@ -234,4 +250,35 @@ IF(ENABLE_PLUGINS)
 ELSE()
     MESSAGE(STATUS " nomacs will be compiled with plugin support .................. NO")
 ENDIF()
+
+IF(libheif_FOUND)
+    MESSAGE(STATUS " nomacs will be compiled with HEIF support .................... YES")
+ELSE()
+    MESSAGE(STATUS " nomacs will be compiled with HEIF support .................... NO")
+ENDIF()
+
+IF(ENABLE_TRANSLATIONS)
+    MESSAGE(STATUS " nomacs will be compiled with Translations .................... YES")
+ELSE()
+    MESSAGE(STATUS " nomacs will be compiled with Translations .................... NO")
+ENDIF()
+
+IF(ENABLE_QUAZIP)
+    MESSAGE(STATUS " nomacs will be compiled with QuaZip support .................. YES")
+ELSE()
+    MESSAGE(STATUS " nomacs will be compiled with QuaZip support .................. NO")
+ENDIF()
+
+IF(USE_SYSTEM_QUAZIP)
+    MESSAGE(STATUS " nomacs will use system QuaZip ................................ YES")
+ELSE()
+    MESSAGE(STATUS " nomacs will use system QuaZip ................................ NO")
+ENDIF()
+
+IF(USE_SYSTEM_LIBQPSD)
+    MESSAGE(STATUS " nomacs will use system QPSD .................................. YES")
+ELSE()
+    MESSAGE(STATUS " nomacs will use system QPSD .................................. NO")
+ENDIF()
+
 MESSAGE(STATUS "----------------------------------------------------------------------------------")

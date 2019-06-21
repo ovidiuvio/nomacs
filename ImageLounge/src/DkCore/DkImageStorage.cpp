@@ -66,7 +66,7 @@ QImage DkImage::fromWinHBITMAP(HDC hdc, HBITMAP bitmap, int w, int h) {
 	bmi.bmiHeader.biCompression = BI_RGB;
 	bmi.bmiHeader.biSizeImage   = w * h * 4;
 
-	QImage image(w, h, QImage::Format_ARGB32_Premultiplied);
+	QImage image(w, h, QImage::Format_ARGB32);
 	if (image.isNull())
 		return image;
 
@@ -349,7 +349,6 @@ QImage DkImage::resizeImage(const QImage& img, const QSize& newSize, double fact
 	case ipl_lanczos:	ipl = CV_INTER_LANCZOS4; break;
 	}
 
-
 	try {
 		
 		QImage qImg;
@@ -383,7 +382,8 @@ QImage DkImage::resizeImage(const QImage& img, const QSize& newSize, double fact
 
 		return qImg;
 
-	} catch (std::exception se) {
+	} 
+	catch (std::exception se) {
 		return QImage();
 	}
 
@@ -403,7 +403,7 @@ QImage DkImage::resizeImage(const QImage& img, const QSize& newSize, double fact
 	
 bool DkImage::alphaChannelUsed(const QImage& img) {
 
-	if (img.format() != QImage::Format_ARGB32 && img.format() != QImage::Format_ARGB32_Premultiplied)
+	if (img.format() != QImage::Format_ARGB32 && img.format() != QImage::Format_ARGB32)
 		return false;
 
 	// number of used bytes per line
@@ -551,8 +551,6 @@ QVector<numFmt> DkImage::getGamma2LinearTable(int maxVal) {
 	// i = px/255
 	// i <= 0.04045 -> i/12.92
 	// i > 0.04045 -> (i+0.055)/(1+0.055)^2.4
-
-	qDebug() << "gamma2Linear: ";
 	QVector<numFmt> gammaTable;
 	double a = 0.055;
 
@@ -692,7 +690,7 @@ bool DkImage::autoAdjustImage(QImage& img) {
 		qDebug() << "[Auto Adjust] Grayscale - switching to Normalize: " << img.format();
 		return normImage(img);
 	}
-	else if (img.format() != QImage::Format_ARGB32 && img.format() != QImage::Format_ARGB32_Premultiplied && 
+	else if (img.format() != QImage::Format_ARGB32 && img.format() != QImage::Format_ARGB32 && 
 		img.format() != QImage::Format_RGB32 && img.format() != QImage::Format_RGB888) {
 		qDebug() << "[Auto Adjust] Format not supported: " << img.format();
 		return false;
@@ -1005,6 +1003,121 @@ QImage DkImage::exposure(const QImage & src, double exposure, double offset, dou
 	return imgR;
 }
 
+QImage DkImage::bgColor(const QImage & src, const QColor & col) {
+
+	QImage dst(src.size(), QImage::Format_RGB32);
+	dst.fill(col);
+
+	QPainter p(&dst);
+	p.drawImage(QPoint(0, 0), src);
+
+	return dst;
+}
+
+QByteArray DkImage::extractImageFromDataStream(const QByteArray & ba, const QByteArray & beginSignature, const QByteArray & endSignature, bool debugOutput) {
+	
+	
+	int bIdx = ba.indexOf(beginSignature);
+
+	if (bIdx == -1) {
+		qDebug() << "[ExtractImage] could not locate" << beginSignature;
+		return QByteArray();
+	}
+
+	int eIdx = ba.indexOf(endSignature, bIdx);
+
+	if (eIdx == -1) {
+		qDebug() << "[ExtractImage] could not locate" << endSignature;
+		return QByteArray();
+	}
+
+	QByteArray bac = ba.mid(bIdx, eIdx + endSignature.size() - bIdx);
+
+	if (debugOutput) {
+		qDebug() << "extracting image from stream...";
+		qDebug() << "cropping: [" << bIdx << eIdx << "]";
+		qDebug() << "original size: " << ba.size()/1024.0 << "KB" << "new size: " << bac.size()/1024.0 << "KB" << "difference:" << (ba.size()-bac.size())/1024 << "KB";
+	}
+
+	return bac;
+}
+
+QByteArray DkImage::fixSamsungPanorama(QByteArray & ba) {
+
+	// this code is based on python code from bcyrill
+	// see: https://gist.github.com/bcyrill/e59fda6c7ffe23c7c4b08a990804b269
+	// it fixes SAMSUNG panorama images that are not standard conformant by adding an EOI marker to the QByteArray
+	// see also: https://github.com/nomacs/nomacs/issues/254
+
+	if (ba.size() < 8)
+		return QByteArray();
+
+	QByteArray trailer = ba.right(4);
+
+	// is it a samsung panorama jpg?
+	if (trailer != QByteArray("SEFT"))
+		return QByteArray();
+
+	// TODO saveify:
+	int sefhPos = intFromByteArray(ba, ba.size() - 8) + 8;
+	trailer = ba.right(sefhPos);
+
+	// trailer starts with "SEFH"?
+	if (trailer.left(4) != QByteArray("SEFH"))
+		return QByteArray();
+
+	int endPos = ba.size();
+	int dirPos = endPos - sefhPos;
+
+	int count = intFromByteArray(trailer, 8);
+
+	int firstBlock = 0;
+	bool isPano = false;
+
+	for (int idx = 0; idx < count; idx++) {
+
+		int e = 12 + 12 * idx;
+
+		int noff = intFromByteArray(trailer, e + 4);
+		int size = intFromByteArray(trailer, e + 8);
+
+		if (firstBlock < noff)
+			firstBlock = noff;
+
+		QByteArray cdata = ba.mid(dirPos - noff, size);
+
+		int eoff = intFromByteArray(cdata, 4);
+		QString pi = cdata.mid(8, eoff);
+
+		if (pi == "Panorama_Shot_Info")
+			isPano = true;
+	}
+
+	if (!isPano)
+		return QByteArray();
+
+	int dataPos = dirPos - firstBlock;
+
+	// ok, append the missing marker
+	QByteArray nb;
+	nb.append(ba.left(dataPos));
+	nb.append(QByteArray("\xff\xd9"));
+	nb.append(ba.right(dataPos));
+	qDebug() << "SAMSUNG panorma fix: EOI marker injected";
+
+	return nb;
+
+}
+
+int DkImage::intFromByteArray(const QByteArray & ba, int pos) {
+
+	// TODO saveify:
+	QByteArray tmp = ba.mid(pos, 4);
+	const int* val = (const int*)(tmp.constData());
+
+	return *val;
+}
+
 #ifdef WITH_OPENCV
 cv::Mat DkImage::exposureMat(const cv::Mat& src, double exposure) {
 
@@ -1115,7 +1228,7 @@ QPixmap DkImage::colorizePixmap(const QPixmap& icon, const QColor& col, float op
 	return glow;
 }
 
-QPixmap DkImage::loadIcon(const QString & filePath, const QSize& size) {
+QPixmap DkImage::loadIcon(const QString & filePath, const QSize& size, const QColor& col) {
 	
 	if (filePath.isEmpty())
 		return QPixmap();
@@ -1128,7 +1241,8 @@ QPixmap DkImage::loadIcon(const QString & filePath, const QSize& size) {
 
 	QPixmap icon = loadFromSvg(filePath, s);
 	
-	icon = colorizePixmap(icon, DkSettingsManager::param().display().iconColor);
+	QColor c = (col.isValid()) ? col : DkSettingsManager::param().display().iconColor;
+	icon = colorizePixmap(icon, c);
 
 	return icon;
 }
@@ -1422,12 +1536,12 @@ bool DkImage::unsharpMask(QImage& img, float sigma, float weight) {
 	return true;
 }
 
-QImage DkImage::createThumb(const QImage& image) {
+QImage DkImage::createThumb(const QImage& image, int maxSize) {
 
 	if (image.isNull())
 		return image;
 
-	int maxThumbSize = (int)(max_thumb_size * DkSettingsManager::param().dpiScaleFactor());
+	int maxThumbSize = maxSize == -1 ? (int)(max_thumb_size * DkSettingsManager::param().dpiScaleFactor()) : maxSize;
 	int imgW = image.width();
 	int imgH = image.height();
 
@@ -1571,6 +1685,8 @@ void DkImageStorage::setImage(const QImage& img) {
 
 	init();
 	mImg = img;
+
+	mComputeState = l_cancelled;
 }
 
 void DkImageStorage::antiAliasingChanged(bool antiAliasing) {
@@ -1608,6 +1724,10 @@ QImage DkImageStorage::image(double scale) {
 
 	// currently no alternative is available
 	return mImg;
+}
+
+void DkImageStorage::cancel() {
+	mComputeState = l_cancelled;
 }
 
 void DkImageStorage::compute() {
@@ -1663,6 +1783,11 @@ QImage DkImageStorage::computeIntern(const QImage & src, double scale) {
 }
 
 void DkImageStorage::imageComputed() {
+
+	if (mComputeState == l_cancelled) {
+		mComputeState = l_not_computed;
+		return;
+	}
 
 	mScaledImg = mFutureWatcher.result();
 

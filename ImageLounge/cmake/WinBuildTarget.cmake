@@ -25,7 +25,7 @@ target_link_libraries(
 	${LIBRAW_LIBRARIES} 
 	${OpenCV_LIBS} 
 	${TIFF_LIBRARIES} 
-	${QUAZIP_DEPENDENCY}
+	${QUAZIP_LIBRARIES}
 	)
 	
 set_target_properties(${BINARY_NAME} PROPERTIES COMPILE_FLAGS "-DDK_DLL_IMPORT -DNOMINMAX")
@@ -43,19 +43,17 @@ add_library(
 	)
 target_link_libraries(
 	${DLL_CORE_NAME}
-	${EXIV2_LIBS} 		# metadata support
+	${EXIV2_LIBS} 				# metadata support
 	${VERSION_LIB} 				# needed for registering the curren version
 	${LIBRAW_LIBRARIES} 		# RAW support (optional)
-	${OpenCV_LIBS} 			# image manipulation support (optional)
+	${OpenCV_LIBS} 				# image manipulation support (optional)
 	${TIFF_LIBRARIES} 			# multip page tiff support (optional)
-	${QUAZIP_DEPENDENCY}# ZIP support (optional)
+	${QUAZIP_LIBRARIES}			# ZIP support (optional)
 	)
 
 add_dependencies(
 	${BINARY_NAME} 
 	${DLL_CORE_NAME} 
-	${QUAZIP_DEPENDENCY} 
-	${LIBQPSD_LIBRARY}
 	)
 
 target_include_directories(${BINARY_NAME} 		PRIVATE ${OpenCV_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
@@ -94,6 +92,10 @@ file(GLOB QT_EXTRA_IMAGE_FORMATS "${QT_QMAKE_PATH}/../../qtimageformats/plugins/
 file(COPY ${QT_EXTRA_IMAGE_FORMATS} DESTINATION ${CMAKE_BINARY_DIR}/Release/imageformats PATTERN *d.dll EXCLUDE)
 file(COPY ${QT_EXTRA_IMAGE_FORMATS} DESTINATION ${CMAKE_BINARY_DIR}/RelWithDebInfo/imageformats PATTERN *d.dll EXCLUDE)
 file(COPY ${QT_EXTRA_IMAGE_FORMATS} DESTINATION ${CMAKE_BINARY_DIR}/Debug/imageformats)
+
+# *d.dll would exclude qpsd.dll - so copy this manually...
+file(GLOB QT_PSD_LIB "${QT_QMAKE_PATH}/../plugins/imageformats/qpsd.dll")
+file(COPY ${QT_PSD_LIB} DESTINATION ${CMAKE_BINARY_DIR}/Release/imageformats)
 
 # Platforms
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/Release/platforms)
@@ -137,11 +139,6 @@ if (NOT Qt5Widgets_VERSION VERSION_LESS 5.9.0)
 	file(COPY ${QT_QMAKE_PATH}/Qt5Svg.dll DESTINATION ${CMAKE_BINARY_DIR}/Release/)
 	file(COPY ${QT_QMAKE_PATH}/Qt5Svg.dll DESTINATION ${CMAKE_BINARY_DIR}/RelWithDebInfo/)
 	file(COPY ${QT_QMAKE_PATH}/Qt5Svgd.dll DESTINATION ${CMAKE_BINARY_DIR}/Debug/)
-
-	file(COPY ${QT_QMAKE_PATH}/../plugins/imageformats/qsvg.dll DESTINATION ${CMAKE_BINARY_DIR}/Release/imageformats)
-	file(COPY ${QT_QMAKE_PATH}/../plugins/imageformats/qsvg.dll DESTINATION ${CMAKE_BINARY_DIR}/RelWithDebInfo/imageformats)
-	file(COPY ${QT_QMAKE_PATH}/../plugins/imageformats/qsvgd.dll DESTINATION ${CMAKE_BINARY_DIR}/Debug/imageformats)
-
 endif()
 
 if (NOT Qt5Widgets_VERSION VERSION_LESS 5.11.0)
@@ -163,16 +160,6 @@ foreach(QM ${NOMACS_QM})
 	add_custom_command(TARGET ${BINARY_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy \"${QM}\" \"${CMAKE_BINARY_DIR}/$<CONFIGURATION>/translations/\")
 endforeach(QM)
 
-# copy all themes
-add_custom_command(TARGET ${BINARY_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E make_directory \"${CMAKE_BINARY_DIR}/$<CONFIGURATION>/themes/\")
-
-file(GLOB NMC_THEMES "src/themes/*.css")
-
-foreach(CSS ${NMC_THEMES})
-	message(STATUS "${CSS} added...")
-	add_custom_command(TARGET ${BINARY_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy \"${CSS}\" \"${CMAKE_BINARY_DIR}/$<CONFIGURATION>/themes/\")
-endforeach()
-
 # add build incrementer command if requested
 if (ENABLE_INCREMENTER)
 	add_custom_command(TARGET ${DLL_CORE_NAME} POST_BUILD COMMAND cscript /nologo ${CMAKE_CURRENT_SOURCE_DIR}/src/incrementer.vbs ${CMAKE_CURRENT_SOURCE_DIR}/src/nomacs.rc)
@@ -180,9 +167,8 @@ if (ENABLE_INCREMENTER)
 endif()
 
 # set properties for Visual Studio Projects
-add_definitions(/Zc:wchar_t)
-set(CMAKE_CXX_FLAGS_DEBUG "/W4 /EHsc ${CMAKE_CXX_FLAGS_DEBUG}")
-set(CMAKE_CXX_FLAGS_RELEASE "/W4 /O2 /EHsc -DDK_INSTALL -DQT_NO_DEBUG_OUTPUT ${CMAKE_CXX_FLAGS_RELEASE}")
+set(CMAKE_CXX_FLAGS_DEBUG "/Zc:wchar_t /W4 /EHsc ${CMAKE_CXX_FLAGS_DEBUG}")
+set(CMAKE_CXX_FLAGS_RELEASE "/Zc:wchar_t /W4 /O2 /EHsc -DDK_INSTALL -DQT_NO_DEBUG_OUTPUT ${CMAKE_CXX_FLAGS_RELEASE}")
 
 source_group("Generated Files" FILES ${NOMACS_RCC} ${NOMACS_RC} ${NOMACS_QM} ${NOMACS_AUTOMOC})
 source_group("Translations" FILES ${NOMACS_TRANSLATIONS})
@@ -212,9 +198,33 @@ else()
 	set(VS_PATH "${VS_PATH}/../../Common7/IDE/Remote Debugger/x86")
 endif()
 
+if (ENABLE_HEIF)
+	find_package(libde265)
+	file(COPY ${LIBDE265_BUILD_PATH}/libde265/Release/libde265.dll DESTINATION ${CMAKE_BINARY_DIR}/Release/)
+	file(COPY ${LIBDE265_BUILD_PATH}/libde265/Release/libde265.dll DESTINATION ${CMAKE_BINARY_DIR}/RelWithDebInfo/)
+	file(COPY ${LIBDE265_BUILD_PATH}/libde265/Debug/libde265.dll DESTINATION ${CMAKE_BINARY_DIR}/Debug/)
+
+	find_package(libheif)
+	file(COPY ${libheif_BUILD_PATH}/libheif/Release/libheif.dll DESTINATION ${CMAKE_BINARY_DIR}/Release/)
+	file(COPY ${libheif_BUILD_PATH}/libheif/Release/libheif.dll DESTINATION ${CMAKE_BINARY_DIR}/RelWithDebInfo/)
+	file(COPY ${libheif_BUILD_PATH}/libheif/Debug/libheifd.dll DESTINATION ${CMAKE_BINARY_DIR}/Debug/)
+endif()
+
 # path hints for the dependency collector
-set(DC_PATHS_RELEASE ${EXIV2_BUILD_PATH}/Release/bin ${EXPAT_BUILD_PATH}/Release ${LIBRAW_BUILD_PATH}/Release ${OpenCV_DIR}/bin/Release ${QT_QMAKE_PATH} ${VS_PATH})
-set(DC_PATHS_DEBUG ${EXIV2_BUILD_PATH}/Debug/bin ${EXPAT_BUILD_PATH}/Debug ${LIBRAW_BUILD_PATH}/Debug ${OpenCV_DIR}/bin/Debug ${QT_QMAKE_PATH} ${VS_PATH})
+set(DC_PATHS_RELEASE 
+	${EXIV2_BUILD_PATH}/src/Release 
+	${EXPAT_BUILD_PATH}/Release 
+	${LIBRAW_BUILD_PATH}/Release 
+	${QUAZIP_BUILD_PATH}/Release 
+	${OpenCV_DIR}/bin/Release 
+	${QT_QMAKE_PATH} ${VS_PATH})
+set(DC_PATHS_DEBUG 
+	${EXIV2_BUILD_PATH}/src/Debug 
+	${EXPAT_BUILD_PATH}/Debug 
+	${LIBRAW_BUILD_PATH}/Debug 
+	${QUAZIP_BUILD_PATH}/Debug 
+	${OpenCV_DIR}/bin/Debug 
+	${QT_QMAKE_PATH} ${VS_PATH})
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/DependencyCollector.config.cmake.in ${DC_CONFIG})
 

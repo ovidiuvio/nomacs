@@ -206,6 +206,7 @@ public:
 		roh_loader,
 		hdr_loader,
 		tif_loader,
+		tga_loader,
 	};
 
 	DkBasicLoader(int mode = mode_default);
@@ -217,7 +218,7 @@ public:
 	/**
 	 * Convenience function.
 	 **/
-	bool loadGeneral(const QString& filePath, bool loadMetaData = false, bool fast = false);
+	bool loadGeneral(const QString& filePath, bool loadMetaData = false, bool fast = true);
 
 	/**
 	 * Loads the image for the given file
@@ -225,7 +226,7 @@ public:
 	 * @param skipIdx the number of (internal) pages to be skipped
 	 * @return bool true if the image was loaded
 	 **/
-	bool loadGeneral(const QString& filePath, const QSharedPointer<QByteArray> ba, bool loadMetaData = false, bool fast = false);
+	bool loadGeneral(const QString& filePath, const QSharedPointer<QByteArray> ba, bool loadMetaData = false, bool fast = true);
 
 	/**
 	 * Loads the page requested (with respect to the current page)
@@ -342,6 +343,7 @@ public:
 
 	bool loadPSDFile(const QString& filePath, QImage& img, QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>()) const;
 	bool loadTIFFile(const QString& filePath, QImage& img, QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>()) const;
+    bool loadDrifFile(const QString& filePath, QImage& img, QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>()) const;
 
 #ifdef Q_OS_WIN
 	bool saveWindowsIcon(const QString& filePath, const QImage& img) const;
@@ -359,8 +361,9 @@ public slots:
 
 protected:
 	bool loadRohFile(const QString& filePath, QImage& img, QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>()) const;
+	bool loadTgaFile(const QString& filePath, QImage& img, QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>()) const;
 	bool loadRawFile(const QString& filePath, QImage& img, QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>(), bool fast = false) const;
-	void indexPages(const QString& filePath);
+	void indexPages(const QString& filePath, const QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>());
 	void convert32BitOrder(void *buffer, int width) const;
 
 	int mLoader;
@@ -375,6 +378,44 @@ protected:
 	QVector<DkEditImage> mImages;
 	int mMinHistorySize = 2;
 	int mImageIndex = 0;
+};
+
+namespace tga {
+	typedef struct {
+		unsigned char r, g, b, a;
+	} Pixel;
+
+	typedef struct {
+		char  idlength;
+		char  colourmaptype;
+		char  datatypecode;
+		short colourmaporigin;
+		short colourmaplength;
+		char  colourmapdepth;
+		short x_origin;
+		short y_origin;
+		short width;
+		short height;
+		char  bitsperpixel;
+		char  imagedescriptor;
+	} Header;
+
+	class DkTgaLoader {
+
+
+	public:
+		DkTgaLoader(QSharedPointer<QByteArray> ba = QSharedPointer<QByteArray>());
+
+		QImage image() const;
+		bool load();
+
+	private:
+		void mergeBytes(Pixel * pixel, unsigned char * p, int bytes) const;
+		bool load(QSharedPointer<QByteArray> ba);
+
+		QImage mImg;
+		QSharedPointer<QByteArray> mBa;
+	};
 };
 
 // file downloader from: http://qt-project.org/wiki/Download_Data_from_URL

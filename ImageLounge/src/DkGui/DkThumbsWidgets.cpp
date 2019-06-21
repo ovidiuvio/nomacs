@@ -66,7 +66,7 @@
 namespace nmc {
 
 // DkFilePreview --------------------------------------------------------------------
-DkFilePreview::DkFilePreview(QWidget* parent, Qt::WindowFlags flags) : DkWidget(parent, flags) {
+DkFilePreview::DkFilePreview(QWidget* parent, Qt::WindowFlags flags) : DkFadeWidget(parent, flags) {
 
 	orientation = Qt::Horizontal;
 	windowPosition = pos_north;
@@ -125,6 +125,9 @@ void DkFilePreview::init() {
 	wheelButton->setAttribute(Qt::WA_TransparentForMouseEvents);
 	wheelButton->setPixmap(wp);
 	wheelButton->hide();
+
+	QWidget* nomacs = DkUtils::getMainWindow();
+	connect(this, SIGNAL(showThumbsDockSignal(bool)), nomacs, SLOT(showThumbsDock(bool)));
 }
 
 void DkFilePreview::initOrientations() {
@@ -220,6 +223,10 @@ void DkFilePreview::createContextMenu() {
 
 
 void DkFilePreview::paintEvent(QPaintEvent*) {
+
+	// render nothing if there are no thumbs
+	if (mThumbs.isEmpty())
+		return;
 
 	if (minHeight != DkSettingsManager::param().effectiveThumbSize(this) + yOffset && windowPosition != pos_dock_hor && windowPosition != pos_dock_ver) {
 
@@ -371,7 +378,6 @@ void DkFilePreview::drawThumbs(QPainter* painter) {
 			drawCurrentImgEffect(painter, r);
 		else if (idx == selected && r.contains(p))
 			drawSelectedEffect(painter, r);
-
 
 		//painter->fillRect(QRect(0,0,200, 110), leftGradient);
 	}
@@ -676,6 +682,9 @@ void DkFilePreview::wheelEvent(QWheelEvent *event) {
 		}
 		emit changeFileSignal(fc);
 	}
+
+	// accept the event here - so it won't be propagated to the viewport
+	event->accept();
 }
 
 void DkFilePreview::leaveEvent(QEvent*) {
@@ -683,9 +692,7 @@ void DkFilePreview::leaveEvent(QEvent*) {
 	selected = -1;
 	if (!scrollToCurrentImage) {
 		moveImageTimer->stop();
-		qDebug() << "stopping timer (leaveEvent)";
 	}
-	//fileLabel->hide();
 	update();
 }
 
@@ -694,7 +701,7 @@ void DkFilePreview::contextMenuEvent(QContextMenuEvent *event) {
 	contextMenu->exec(event->globalPos());
 	event->accept();
 
-	DkWidget::contextMenuEvent(event);
+	DkFadeWidget::contextMenuEvent(event);
 }
 
 void DkFilePreview::newPosition() {
@@ -832,7 +839,7 @@ void DkFilePreview::setFileInfo(QSharedPointer<DkImageContainerT> cImage) {
 
 void DkFilePreview::updateThumbs(QVector<QSharedPointer<DkImageContainerT> > thumbs) {
 
-	this->mThumbs = thumbs;
+	mThumbs = thumbs;
 
 	for (int idx = 0; idx < thumbs.size(); idx++) {
 		if (thumbs.at(idx)->isSelected()) {
@@ -848,7 +855,7 @@ void DkFilePreview::setVisible(bool visible, bool saveSettings) {
 
 	emit showThumbsDockSignal(visible);
 
-	DkWidget::setVisible(visible, saveSettings);
+	DkFadeWidget::setVisible(visible, saveSettings);
 }
 
 // DkThumbLabel --------------------------------------------------------------------
@@ -1109,7 +1116,7 @@ void DkThumbScene::updateLayout() {
 		pSize = QSize(views().first()->viewport()->size());
 
     int psz = DkSettingsManager::param().effectiveThumbPreviewSize();
-	mXOffset = qCeil(psz*0.1f);
+	mXOffset = 2;// qCeil(psz*0.1f);
 	mNumCols = qMax(qFloor(((float)pSize.width()-mXOffset)/(psz + mXOffset)), 1);
 	mNumCols = qMin(mThumbLabels.size(), mNumCols);
 	mNumRows = qCeil((float)mThumbLabels.size()/mNumCols);
@@ -1212,7 +1219,11 @@ void DkThumbScene::keyPressEvent(QKeyEvent * event) {
 	if (idx == -1)
 		return;
 
-	if (event->modifiers() != Qt::ShiftModifier)
+	if (event->modifiers() != Qt::ShiftModifier && 
+		(event->key() == Qt::Key_Left || 
+		 event->key() == Qt::Key_Right || 
+		 event->key() == Qt::Key_Up || 
+		 event->key() == Qt::Key_Down))
 		selectThumbs(false);
 
 	switch (event->key()) {
@@ -1829,7 +1840,7 @@ void DkThumbsView::fetchThumbs() {
 }
 
 // DkThumbScrollWidget --------------------------------------------------------------------
-DkThumbScrollWidget::DkThumbScrollWidget(QWidget* parent /* = 0 */, Qt::WindowFlags flags /* = 0 */) : DkWidget(parent, flags) {
+DkThumbScrollWidget::DkThumbScrollWidget(QWidget* parent /* = 0 */, Qt::WindowFlags flags /* = 0 */) : DkFadeWidget(parent, flags) {
 
 	setObjectName("DkThumbScrollWidget");
 	setContentsMargins(0,0,0,0);
@@ -1882,12 +1893,7 @@ void DkThumbScrollWidget::createToolbar() {
 	toolButton->setMenu(m);
 	toolButton->setAccessibleName(menuTitle);
 	toolButton->setText(menuTitle);
-	QPixmap pm = QIcon(":/nomacs/img/sort.svg").pixmap(DkSettingsManager::param().effectiveIconSize(this));
-
-	if (!DkSettingsManager::param().display().defaultIconColor || DkSettingsManager::param().app().privateMode)
-		pm = DkImage::colorizePixmap(pm, DkSettingsManager::param().display().iconColor);
-
-	toolButton->setIcon(pm);
+	toolButton->setIcon(DkImage::loadIcon(":/nomacs/img/sort.svg"));
 	toolButton->setPopupMode(QToolButton::InstantPopup);
 	mToolbar->addWidget(toolButton);
 
@@ -1945,11 +1951,11 @@ void DkThumbScrollWidget::batchPrint() const {
 
 	DkPrintPreviewDialog* printPreviewDialog = new DkPrintPreviewDialog(DkUtils::getMainWindow());
 
-	for (const QImage& img : imgs) {
+	for (const QImage& img : imgs)
 		printPreviewDialog->addImage(img);
-	}
 
-	printPreviewDialog->show();
+	printPreviewDialog->exec();
+	printPreviewDialog->deleteLater();
 }
 
 void DkThumbScrollWidget::updateThumbs(QVector<QSharedPointer<DkImageContainerT> > thumbs) {
@@ -1972,7 +1978,7 @@ void DkThumbScrollWidget::setVisible(bool visible) {
 
 	connectToActions(visible);
 
-	DkWidget::setVisible(visible);
+	DkFadeWidget::setVisible(visible);
 
 	if (visible) {
 		mThumbsScene->updateThumbLabels();
@@ -2036,7 +2042,7 @@ void DkThumbScrollWidget::resizeEvent(QResizeEvent *event) {
 	if (event->oldSize().width() != event->size().width() && isVisible())
 		mThumbsScene->updateLayout();
 
-	DkWidget::resizeEvent(event);
+	DkFadeWidget::resizeEvent(event);
 
 }
 
@@ -2076,13 +2082,17 @@ DkThumbPreviewLabel::DkThumbPreviewLabel(const QString& filePath, int thumbSize,
 	QFileInfo fInfo(filePath);
 	setToolTip(fInfo.fileName());
 
-	mThumb->fetchThumb();
+	mThumb->fetchThumb(DkThumbNail::force_exif_thumb);
 }
 
 void DkThumbPreviewLabel::thumbLoaded() {
 
 	if (mThumb->getImage().isNull()) {
-		qDebug() << QFileInfo(mThumb->getFilePath()).fileName() << " not loaded...";
+		setProperty("empty", true);	// apply empty style
+		style()->unpolish(this);
+		style()->polish(this);
+		update();
+
 		return;
 	}
 
@@ -2104,7 +2114,7 @@ void DkThumbPreviewLabel::mousePressEvent(QMouseEvent *ev) {
 }
 
 // -------------------------------------------------------------------- DkRecentFilesEntry 
-DkRecentDirWidget::DkRecentDirWidget(const DkRecentDir& rde, QWidget* parent) : DkWidget(parent) {
+DkRecentDirWidget::DkRecentDirWidget(const DkRecentDir& rde, QWidget* parent) : DkFadeWidget(parent) {
 
 	mRecentDir = rde;
 
@@ -2139,17 +2149,26 @@ void DkRecentDirWidget::createLayout() {
 	mButtons[button_pin]->setFlat(true);
 	mButtons[button_pin]->hide();
 
-	mButtons[button_remove] = new QPushButton(DkImage::loadIcon(":/nomacs/img/close-tab.svg"), "", this);
+	mButtons[button_remove] = new QPushButton(DkImage::loadIcon(":/nomacs/img/close.svg"), "", this);
 	mButtons[button_remove]->setToolTip(tr("Remove this directory"));
 	mButtons[button_remove]->setObjectName("remove");
 	mButtons[button_remove]->setFlat(true);
 	mButtons[button_remove]->hide();
 
 	QVector<DkThumbPreviewLabel*> tls;
-	for (auto tp : mRecentDir.filePaths(4)) {
-		auto tpl = new DkThumbPreviewLabel(tp, 42, this);
-		connect(tpl, SIGNAL(loadFileSignal(const QString&, bool)), this, SIGNAL(loadFileSignal(const QString&, bool)));
-		tls << tpl;
+
+	// check if the folder exists (in the current context)
+	// this should fix issues with disconnected samba drives on windows
+	if (DkUtils::exists(mRecentDir.firstFilePath(), 30)) {
+
+		for (auto tp : mRecentDir.filePaths(4)) {
+			auto tpl = new DkThumbPreviewLabel(tp, 42, this);
+			connect(tpl, SIGNAL(loadFileSignal(const QString&, bool)), this, SIGNAL(loadFileSignal(const QString&, bool)));
+			tls << tpl;
+		}
+	}
+	else {
+		qInfo() << mRecentDir.firstFilePath() << "does not exist - according to a fast check";
 	}
 
 	QLabel* pathLabel = new QLabel(mRecentDir.dirPath(), this);
@@ -2203,7 +2222,7 @@ void DkRecentDirWidget::mousePressEvent(QMouseEvent * event) {
 		emit loadFileSignal(mRecentDir.firstFilePath(), event->modifiers() == Qt::ControlModifier);
 	}
 
-	DkWidget::mousePressEvent(event);
+	DkFadeWidget::mousePressEvent(event);
 }
 
 void DkRecentDirWidget::enterEvent(QEvent * event) {
@@ -2211,7 +2230,7 @@ void DkRecentDirWidget::enterEvent(QEvent * event) {
 	for (auto b : mButtons)
 		b->show();
 
-	DkWidget::enterEvent(event);
+	DkFadeWidget::enterEvent(event);
 }
 
 void DkRecentDirWidget::leaveEvent(QEvent * event) {
@@ -2219,11 +2238,11 @@ void DkRecentDirWidget::leaveEvent(QEvent * event) {
 	for (auto b : mButtons)
 		b->hide();
 
-	DkWidget::leaveEvent(event);
+	DkFadeWidget::leaveEvent(event);
 }
 
 // -------------------------------------------------------------------- DkRecentFilesEntry 
-DkRecentFilesWidget::DkRecentFilesWidget(QWidget* parent) : DkWidget(parent) {
+DkRecentFilesWidget::DkRecentFilesWidget(QWidget* parent) : DkFadeWidget(parent) {
 
 	createLayout();
 	setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
@@ -2234,7 +2253,7 @@ void DkRecentFilesWidget::setVisible(bool visible) {
 	if (visible)
 		updateList();
 
-	DkWidget::setVisible(visible);
+	DkFadeWidget::setVisible(visible);
 }
 
 void DkRecentFilesWidget::createLayout() {
@@ -2246,7 +2265,7 @@ void DkRecentFilesWidget::createLayout() {
 
 	mScrollArea->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
 
-	updateList();
+	//updateList();
 }
 
 void DkRecentFilesWidget::updateList() {
@@ -2289,6 +2308,14 @@ DkRecentDir::DkRecentDir(const QStringList& filePaths, bool pinned) {
 bool DkRecentDir::operator==(const DkRecentDir& o) const {
 
 	return dirPath() == o.dirPath();
+}
+
+void DkRecentDir::update(const DkRecentDir & o) {
+
+	for (const QString& cp : o.filePaths())
+		mFilePaths.push_front(cp);
+
+	mFilePaths.removeDuplicates();
 }
 
 QStringList DkRecentDir::filePaths(int max) const {
@@ -2349,6 +2376,7 @@ void DkRecentDir::remove() const {
 // -------------------------------------------------------------------- DkRecentDirManager 
 DkRecentDirManager::DkRecentDirManager() {
 
+	// update pinned files
 	mDirs = genFileLists(DkSettingsManager::param().global().pinnedFiles, true);
 	auto recentDirs = genFileLists(DkSettingsManager::param().global().recentFiles);
 
@@ -2356,6 +2384,12 @@ DkRecentDirManager::DkRecentDirManager() {
 
 		if (!mDirs.contains(rde))
 			mDirs << rde;
+		else {
+			int idx = mDirs.indexOf(rde);
+			if (idx != -1)
+				mDirs[idx].update(rde);
+		}
+
 	}
 }
 
@@ -2369,8 +2403,15 @@ QList<DkRecentDir> DkRecentDirManager::genFileLists(const QStringList & filePath
 
 	for (const QString& cp : filePaths) {
 
+		QFileInfo fi(cp);
+
+		// this if is needed if there are errors in our data
+		// however, it incredibly slows down the process if samba mounts are lost
+		//if (!fi.isFile())
+		//	continue;
+		
 		// get folder
-		QString dp = QFileInfo(cp).absolutePath();
+		QString dp = fi.absolutePath();
 
 		auto dir = gPaths.find(dp);
 
@@ -2394,6 +2435,5 @@ QList<DkRecentDir> DkRecentDirManager::genFileLists(const QStringList & filePath
 
 	return rdes;
 }
-
 
 }

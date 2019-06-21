@@ -4,6 +4,10 @@
 	background-color: QColor(0,0,0,20); border: 1px solid #000000;
 } */
 
+QWidget {
+	font-size: 10pt;
+}
+
 /* batch */
 nmc--DkBatchInput QTextEdit {
 	border: none;
@@ -11,7 +15,7 @@ nmc--DkBatchInput QTextEdit {
 
 QLabel#batchContentTitle {
 	text-transform: uppercase;
-	font: light "Segoe UI";
+	font: thin "Segoe UI";
 	font-size: 16pt;
 	font-weight: 100;
 	color: #333;
@@ -55,16 +59,30 @@ nmc--DkBatchButtonsWidget QPushButton {
 	border: none;
 }
 
+QPushButton#flatWhite {
+	border: none;
+	padding: 0;
+	margin: 0;
+}
+
+QPushButton#flatWhite:hover {
+	background-color: rgba(255,255,255,.2);
+}
+
+QPushButton#flatWhite:pressed {
+	background-color: rgba(255,255,255,.4);
+}
+
 QTabBar::close-button {
-    image: url(:/nomacs/img/close-tab.svg);
+    image: url(:/nomacs/img/close.svg);
 }
 
 QTabBar::close-button:hover {
-	image: url(:/nomacs/img/close-tab-hover.svg);
+	image: url(:/nomacs/img/close-hover.svg);
 }
 
 QDockWidget {
-	font: light "Segoe UI";
+	font: thin "Segoe UI";
 	color: #000;
 	border: 1px solid #ccc;
 }
@@ -128,7 +146,6 @@ QGraphicsView#DkThumbsView {
 QToolButton#DkThumbToolButton::menu-indicator { 
 	image: none; 
 }
-
 
 QLabel#statusBarLabel {
 	color: #555;
@@ -236,7 +253,6 @@ QLabel#commentTitleLabel {
 	margin: 0; 
 	padding: 0; 
 	font-size: 25px; 
-	font-family: Segoe UI; 
 	font-weight: light;
 }
 
@@ -258,7 +274,6 @@ QLabel#DkMetaDataHUDTitle {
 	color: HUD_FOREGROUND_COLOR; 
 	margin: 0; 
 	font-size: 21px; 
-	font-family: Segoe UI; 
 	font-weight: light;
 }
 
@@ -342,6 +357,7 @@ nmc--DkBatchTabButton {
 	font-size: 14pt;
 	padding: 10px 20px;
 	text-align: left;
+	border: none;
 }
 
 nmc--DkBatchTabButton {
@@ -366,7 +382,7 @@ nmc--DkBatchTabButton:checked {
 QLabel#DkPreferenceTitle {
 	text-transform: uppercase;
 	padding: 10px 20px;
-	font: light "Segoe UI";
+	font: thin "Segoe UI";
 	font-size: 24pt;
 	font-weight: 100;
 	border-bottom: 1px solid #333;
@@ -374,7 +390,7 @@ QLabel#DkPreferenceTitle {
 }
 
 QPushButton#infoButton {
-	font: light "Segoe UI";
+	font: thin "Segoe UI";
 	font-size: 16pt;
 	font-weight: 100;
 	color: #666;
@@ -397,7 +413,7 @@ QWidget#DkPreferenceWidget {
 }
 
 QLabel#subTitle {
-	font: light "Segoe UI";
+	font: thin "Segoe UI";
 	margin-top: 10px;
 	font-size: 14pt;
 	color: #666;
@@ -406,7 +422,10 @@ QLabel#subTitle {
 /* preferences widgets */
 QComboBox#languageCombo,
 QSpinBox#numThreads,
-QPushButton#logFolder {
+QPushButton#logFolder,
+nmc--DkDisplayPreference QSpinBox,
+nmc--DkDisplayPreference QDoubleSpinBox,
+nmc--DkDisplayPreference QComboBox {
 	max-width: 200px;
 }
 
@@ -447,15 +466,23 @@ nmc--DkDescriptionEdit {
 nmc--DkBaseManipulatorWidget#darkManipulator QSpinBox,
 nmc--DkBaseManipulatorWidget#darkManipulator QLabel,
 nmc--DkBaseManipulatorWidget#darkManipulator QCheckBox,
-nmc--DkBaseManipulatorWidget#darkManipulator QDoubleSpinBox {
+nmc--DkBaseManipulatorWidget#darkManipulator QDoubleSpinBox,
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox,
+nmc--DkBaseManipulatorWidget#darkManipulator QLineEdit {
 	color: #fff;
 }
 
+nmc--DkBaseManipulatorWidget#darkManipulator QLineEdit,
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox,
 nmc--DkBaseManipulatorWidget#darkManipulator QDoubleSpinBox,
 nmc--DkBaseManipulatorWidget#darkManipulator QSpinBox {
 	background: #333;
 	border: none;
 	border-bottom: 1px solid #fff;
+}
+
+nmc--DkBaseManipulatorWidget#darkManipulator QWidget {
+	background: #333;
 }
 
 nmc--DkBaseManipulatorWidget#darkManipulator QDoubleSpinBox::up-button,
@@ -506,11 +533,54 @@ nmc--DkBaseManipulatorWidget#darkManipulator QSlider#DkHueSlider::groove:horizon
 	background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ff0000, stop:0.167 #ffff00, stop:0.333 #00ff00, stop:0.5 #00ffff, stop:0.666 #0000ff, stop:0.833 #ff00ff, stop:1 #ff0000);
 }
 
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox {
+	font-size: 11pt;
+	min-height: 30px;
+}
+
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox::drop-down {
+	image: url(:/nomacs/img/down-white.svg);
+	border: none;
+	width: 16px;
+	height: 16px;
+	padding: 5px;
+}
+
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox::drop-down:hover {
+	background-color: rgba(255, 255, 255, 30);
+}
+
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox QListView {
+	border: 1px solid #444;
+	font-size: 11pt;
+}
+
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox QListView::item {
+	color: #fff;
+	padding: 5px;
+}
+
+nmc--DkBaseManipulatorWidget#darkManipulator QComboBox QListView::item:selected { 
+	color: #333;
+	background-color: HIGHLIGHT_COLOR; 
+}
+
 QLabel#DkManipulatorSettingsTitle {
 	font: thin "Segoe UI";
 	font-size: 14pt;
 	color: #fff;
 	margin-bottom: 5pt;
+}
+
+QSlider#cpHueSlider::groove:vertical {
+	background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #ff0000, stop:0.167 #ff00ff, stop:0.333 #0000ff, stop:0.5 #00ffff, stop:0.666 #00ff00, stop:0.833 #ffff00, stop:1 #ff0000);
+}
+
+QSlider#cpHueSlider::handle:vertical {
+	border: 0px solid #333;
+	border-top: 2px solid #333;
+	border-bottom: 2px solid #333;
+	height: 5px;
 }
 
 /* profile widget */
@@ -528,9 +598,9 @@ QListWidget#profileList {
 	max-width: 400px;
 }
 
-nmc--DkMetaDataSelection QScrollArea QWidget {
+/*nmc--DkMetaDataSelection QScrollArea QWidget {
 	background-color: #fff;
-}
+}*/
 
 QLabel#DkLabelBg {
 	color: HUD_FOREGROUND_COLOR;
@@ -555,14 +625,13 @@ nmc--DkRecentDirWidget::hover {
 }
 
 QLabel#recentFilesTitle {
-	font: light "Segoe UI";
+	font: thin "Segoe UI";
 	font-size: 16pt;
 	color: #000;
 	font-weight: 100;
 }
 
 QLabel#recentFilesPath {
-	font: "Segoe UI";
 	font-style: italic;
 	color: #666;
 }
@@ -590,6 +659,10 @@ nmc--DkThumbPreviewLabel {
 	padding: 1px;
 }
 
+nmc--DkThumbPreviewLabel[empty="true"] {
+	background-color: #ddd;
+}
+
 nmc--DkThumbPreviewLabel:hover {
 	border: 1px solid HIGHLIGHT_COLOR;
 }
@@ -601,4 +674,26 @@ QDoubleSpinBox#sbZoom {
 	background-color: rgba(0,0,0,0); 
 	border: none;
 	selection-background-color: HIGHLIGHT_COLOR;
+}
+
+QPushButton#displayButton {
+	border: 1px solid #ddd;
+	background-color: #fff;
+	
+	font: light "Segoe UI";
+	font-size: 16pt;
+	color: #000;
+	font-weight: 100;
+}
+
+QPushButton#displayButton:hover {
+	background-color: HIGHLIGHT_LIGHT;
+}
+
+QPushButton#displayButton:checked {
+	border: 1px solid HIGHLIGHT_COLOR;
+}
+
+QToolBar {
+	background-color: BACKGROUND_COLOR;
 }

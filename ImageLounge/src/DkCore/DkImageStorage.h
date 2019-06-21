@@ -47,6 +47,10 @@
 #pragma warning(disable: 4714)	// Qt's force inline
 #endif
 
+#if defined(__GNUC__) && defined(Q_OS_MAC) || defined(__clang__)
+#pragma GCC diagnostic ignored "-Winvalid-source-encoding"
+#endif
+
 #ifndef DllCoreExport
 #ifdef DK_CORE_DLL_EXPORT
 #define DllCoreExport Q_DECL_EXPORT
@@ -77,7 +81,13 @@ class DllCoreExport DkImage {
 public:
 
 	/**< interpolation mapping OpenCV -> Qt */
-	enum{ipl_nearest, ipl_area, ipl_linear, ipl_cubic, ipl_lanczos, ipl_end};
+	enum {
+		ipl_nearest, 
+		ipl_area, 
+		ipl_linear, 
+		ipl_cubic, 
+		ipl_lanczos, 
+		ipl_end};
 
 #ifdef Q_OS_WIN
 	static QImage fromWinHBITMAP(HDC hdc, HBITMAP bitmap, int w, int h);
@@ -121,10 +131,10 @@ public:
 	static QImage rotateImage(const QImage& img, double angle);
 	static QImage grayscaleImage(const QImage& img);
 	static QPixmap colorizePixmap(const QPixmap& icon, const QColor& col, float opacity = 1.0f);
-	static QPixmap loadIcon(const QString& filePath = QString(), const QSize& size = QSize());
+	static QPixmap loadIcon(const QString& filePath = QString(), const QSize& size = QSize(), const QColor& col = QColor());
 	static QPixmap loadIcon(const QString& filePath, const QColor& col, const QSize& size = QSize());
 	static QPixmap loadFromSvg(const QString& filePath, const QSize& size);
-	static QImage createThumb(const QImage& img);
+	static QImage createThumb(const QImage& img, const int maxSize = -1);
 	static bool addToImage(QImage& img, unsigned char val = 1);
 	static QColor getMeanColor(const QImage& img);
 	static uchar findHistPeak(const int* hist, float quantile = 0.005f);
@@ -133,6 +143,10 @@ public:
 	static QImage cropToImage(const QImage& src, const DkRotatingRect& rect, const QColor& fillColor = QColor());
 	static QImage hueSaturation(const QImage& src, int hue, int sat, int brightness);
 	static QImage exposure(const QImage& src, double exposure, double offset, double gamma);
+	static QImage bgColor(const QImage& src, const QColor& col);
+	static QByteArray extractImageFromDataStream(const QByteArray& ba, const QByteArray& beginSignature = "‰PNG", const QByteArray& endSignature = "END®B`‚", bool debugOutput = false);
+	static QByteArray fixSamsungPanorama(QByteArray& ba);
+	static int intFromByteArray(const QByteArray& ba, int pos);
 	
 #ifdef WITH_OPENCV
 	static cv::Mat exposureMat(const cv::Mat& src, double exposure);
@@ -153,6 +167,7 @@ public:
 		l_computing,
 		l_computed,
 		l_empty,
+		l_cancelled,
 
 		l_end
 	};
@@ -168,6 +183,7 @@ public:
 	void setImage(const QImage& img);
 	QImage imageConst() const;
 	QImage image(double scale = 1.0);
+	void cancel();
 
 public slots:
 	void antiAliasingChanged(bool antiAliasing);

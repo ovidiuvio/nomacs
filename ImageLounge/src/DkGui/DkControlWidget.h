@@ -28,6 +28,7 @@
 #pragma once
 
 #include "DkImageContainer.h"
+#include "DkBaseWidgets.h"
 
 #pragma warning(push, 0)	// no warnings from includes - begin
 #include <QWidget>
@@ -76,7 +77,7 @@ class DkDelayedInfo;
 class DkOverview;
 class DkViewPortInterface;
 
-class DllCoreExport DkControlWidget : public QWidget {
+class DllCoreExport DkControlWidget : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -153,12 +154,12 @@ public slots:
 protected:
 
 	// events
-	void mousePressEvent(QMouseEvent *event);
-	void mouseReleaseEvent(QMouseEvent *event);
-	void mouseMoveEvent(QMouseEvent *event);
+	void mousePressEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void mouseMoveEvent(QMouseEvent *event) override;
 
-	void keyPressEvent(QKeyEvent *event);
-	void keyReleaseEvent(QKeyEvent *event);
+	void keyPressEvent(QKeyEvent *event) override;
+	void keyReleaseEvent(QKeyEvent *event) override;
 
 	// functions
 	void init();

@@ -61,6 +61,7 @@ namespace nmc {
 class DkImageContainer;
 class DkPluginContainer;
 class DkBaseManipulator;
+class DkMetaDataT;
 
 class DllCoreExport DkAbstractBatch {
 
@@ -186,7 +187,7 @@ public:
 		bool correctGamma = false
 		);
 
-	virtual bool compute(QSharedPointer<DkImageContainer> container, QStringList& logStrings) const;
+	virtual bool compute(QSharedPointer<DkImageContainer> container, QStringList& logStrings) const override;
 	virtual QString name() const override;
 	virtual bool isActive() const override;
 
@@ -242,6 +243,7 @@ protected:
 	bool deleteOriginalFile();
 	bool copyFile();
 	bool renameFile();
+	bool updateMetaData(DkMetaDataT* md);
 
 	DkSaveInfo mSaveInfo;
 	int mFailure = 0;

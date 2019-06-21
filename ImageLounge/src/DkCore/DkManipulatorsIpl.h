@@ -130,6 +130,21 @@ private:
 	bool mInverted = false;
 };
 
+class DllCoreExport DkColorManipulator : public DkBaseManipulatorExt {
+
+public:
+	DkColorManipulator(QAction* action);
+
+	QImage apply(const QImage& img) const override;
+	QString errorMessage() const override;
+
+	void setColor(const QColor& col);
+	QColor color() const;
+
+private:
+	QColor mColor = Qt::white;
+};
+
 class DllCoreExport DkUnsharpMaskManipulator : public DkBaseManipulatorExt {
 
 public:
@@ -162,6 +177,29 @@ public:
 
 private:
 	int mAngle = 0;
+};
+
+class DllCoreExport DkResizeManipulator : public DkBaseManipulatorExt {
+
+public:
+	DkResizeManipulator(QAction* action);
+
+	QImage apply(const QImage& img) const override;
+	QString errorMessage() const override;
+
+	void setScaleFactor(double sf);
+	double scaleFactor() const;
+
+	void setInterpolation(int ipl);
+	int interpolation() const;
+
+	void setCorrectGamma(bool ug);
+	bool correctGamma() const;
+
+private:
+	double mScaleFactor = 1.0;
+	int mInterpolation = 1;
+	bool mCorrectGamma = false;
 };
 
 class DllCoreExport DkThresholdManipulator : public DkBaseManipulatorExt {

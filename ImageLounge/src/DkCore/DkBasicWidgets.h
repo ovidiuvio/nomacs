@@ -28,6 +28,8 @@
 
 #pragma once
 
+#include "DkBaseWidgets.h"
+
 #pragma warning(push, 0)	// no warnings from includes
 #include <QWidget>
 #pragma warning(pop)
@@ -51,12 +53,14 @@ class QSpinBox;
 class QDoubleSpinBox;
 class QColorDialog;
 class QPushButton;
+class QMenu;
+class QLineEdit;
 
 namespace nmc {
 
 // nomacs defines
 
-class DllCoreExport DkSlider : public QWidget {
+class DllCoreExport DkSlider : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -86,7 +90,7 @@ protected:
 	QSpinBox* sliderBox;
 };
 
-class DllCoreExport DkDoubleSlider : public QWidget {
+class DllCoreExport DkDoubleSlider : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -95,6 +99,7 @@ public:
 	QSlider* getSlider() const;
 	void setMinimum(double minValue);
 	void setMaximum(double maxValue);
+	void setCenterValue(double center);
 	void setTickInterval(double ticValue);
 	double value() const;
 	void setFocus(Qt::FocusReason reason);
@@ -110,14 +115,17 @@ signals:
 
 protected:
 	void createLayout();
+	int map(double val) const;
+	double mapInv(int val) const;
 
 	QLabel* mTitleLabel;
 	QSlider* mSlider;
 	QDoubleSpinBox* mSliderBox;
 	bool mSliderInverted = false;
+	double mCenter = 0;
 };
 
-class DllCoreExport DkColorChooser : public QWidget {
+class DllCoreExport DkColorChooser : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -152,7 +160,99 @@ protected:
 
 };
 
-class DllCoreExport DkRectWidget : public QWidget {
+class DllCoreExport DkColorEdit : public DkWidget {
+	Q_OBJECT
+
+public:
+	DkColorEdit(const QColor& col = QColor(), QWidget* parent = 0);
+
+	void setColor(const QColor& col);
+	QColor color() const;
+
+signals:
+	void newColor(const QColor& col);
+
+public slots:
+	void colorChanged();
+	void hashChanged(const QString& name);
+	void hashEditFinished();
+
+protected:
+	void createLayout();
+
+	enum cols {
+		r = 0,
+		g,
+		b,
+
+		c_end
+	};
+
+	QVector<QSpinBox*> mColBoxes;
+	QLineEdit* mColHash;
+	QColor mColor;
+};
+
+class DllCoreExport DkColorPane : public DkWidget {
+	Q_OBJECT
+
+public:
+	DkColorPane(QWidget* parent = 0);
+
+	QColor color() const;
+	double hue() const;
+
+signals:
+	void colorSelected(const QColor& col) const;
+
+public slots:
+	void setHue(int hue);
+	void setColor(const QColor& col);
+
+protected:
+	void paintEvent(QPaintEvent* ev) override;
+	void mouseMoveEvent(QMouseEvent* me) override;
+	void mouseReleaseEvent(QMouseEvent* me) override;
+	void mousePressEvent(QMouseEvent* me) override;
+	void resizeEvent(QResizeEvent* re) override;
+	
+	QPoint color2Pos(const QColor& col) const;
+	QColor pos2Color(const QPoint& pos) const;
+	QColor ipl(const QColor& c0, const QColor& c1, double alpha) const;
+	void setPos(const QPoint& pos);
+
+	double brightness(const QColor& col) const;
+
+	QColor mColor = QColor(255, 0, 0);
+	QPoint mPos = QPoint(0, 0);
+};
+
+class DllCoreExport DkColorPicker : public DkWidget {
+	Q_OBJECT
+
+public:
+	DkColorPicker(QWidget* parent = 0);
+
+	QColor color() const;
+
+signals:
+	void colorSelected(const QColor& col);
+
+public slots:
+	void setColor(const QColor& col);
+	void showMenu(const QPoint& pos = QPoint());
+
+protected:
+	void contextMenuEvent(QContextMenuEvent* cme) override;
+	void createLayout();
+
+	DkColorPane* mColorPane = 0;
+	QLabel* mColorPreview = 0;
+	QMenu* mContextMenu = 0;
+	DkColorEdit* mColorEdit = 0;
+};
+
+class DllCoreExport DkRectWidget : public DkWidget {
 	Q_OBJECT
 
 public:

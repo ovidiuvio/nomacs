@@ -92,51 +92,6 @@ QDebug qWarningClean() {
 namespace nmc {
 
 
-void qtMessageOutput(QtMsgType type, const QMessageLogContext &, const QString &msg) {
-
-#if QT_VERSION >= 0x050500
-	// this might cause a crash (if qDebug() is used in a destructor)
-	if (!DkSettingsManager::param().app().useLogFile)
-		return;	// should not be called anyhow
-
-	static QString filePath;
-
-	if (filePath.isEmpty())
-		filePath = DkUtils::getLogFilePath();
-
-	QString txt;
-
-	switch (type) {
-	case QtDebugMsg:
-		return;	// ignore debug messages
-		break;
-	case QtInfoMsg:
-		txt = msg;
-		break;
-	case QtWarningMsg:
-		txt = "[Warning] " + msg;
-		break;
-	case QtCriticalMsg:
-		txt = "[Critical] " + msg;
-		break;
-	case QtFatalMsg:
-		txt = "[FATAL] " + msg;
-		break;
-	default:
-		//txt = "unknown message type: " + QString::number(type) + msg;
-		return;
-	}
-
-	QFile outFile(filePath);
-	outFile.open(QIODevice::WriteOnly | QIODevice::Append);
-
-	QTextStream ts(&outFile);
-	ts << txt << endl;
-#endif
-}
-
-
-
 // code based on: http://stackoverflow.com/questions/8565430/complete-these-3-methods-with-linux-and-mac-code-memory-info-platform-independe
 double DkMemory::getTotalMemory() {
 
@@ -318,19 +273,21 @@ QString DkUtils::resolveSymLink(const QString & filePath) {
 					continue;
 
 				QFileInfo fi(cl);
-				if (fi.exists()) {
+				if (fi.exists() && fi.isFile() && DkUtils::hasValidSuffix(fi.fileName())) {
 					rFilePath = fi.absoluteFilePath();
 					break;
 				}
 
 				// is there a relative path?
 				fi = QFileInfo(fInfo.absolutePath() + QDir::separator() + cl);
-				if (fi.exists() & fi.isFile()) {
+				if (fi.exists() && fi.isFile() && DkUtils::hasValidSuffix(fi.fileName())) {
 					rFilePath = fi.absoluteFilePath();
 					break;
 				}
 			}
 		}
+
+		file.close();
 	}
 
 	return rFilePath;
@@ -478,6 +435,63 @@ void DkUtils::registerFileVersion() {
 	QApplication::setApplicationVersion(version);
 }
 
+/// <summary>
+/// Saves log messages to a temporary log file.
+/// Log messages are saved to DkUtils::instance().app().logPath() if
+/// DkUtils::instance().app().useLogFile ist true.
+/// </summary>
+/// <param name="type">The message type (QtDebugMsg are not written to the log).</param>
+/// <param name=""></param>
+/// <param name="msg">The message.</param>
+void qtMessageOutput(QtMsgType type, const QMessageLogContext &, const QString &msg) {
+
+	if (!DkSettingsManager::param().app().useLogFile)
+		return;
+
+	DkUtils::logToFile(type, msg);
+}
+
+void DkUtils::logToFile(QtMsgType type, const QString &msg) {
+
+#if QT_VERSION >= 0x050500
+
+	static QString filePath;
+
+	if (filePath.isEmpty())
+		filePath = DkUtils::getLogFilePath();
+
+	QString txt;
+
+	switch (type) {
+	case QtDebugMsg:
+		return;	// ignore debug messages
+		break;
+	case QtInfoMsg:
+		txt = msg;
+		break;
+	case QtWarningMsg:
+		txt = "[Warning] " + msg;
+		break;
+	case QtCriticalMsg:
+		txt = "[Critical] " + msg;
+		break;
+	case QtFatalMsg:
+		txt = "[FATAL] " + msg;
+		break;
+	default:
+		//txt = "unknown message type: " + QString::number(type) + msg;
+		return;
+	}
+
+	QFile outFile(filePath);
+	if (!outFile.open(QIODevice::WriteOnly | QIODevice::Append))
+		printf("cannot open %s for logging\n", filePath.toStdString().c_str());
+
+	QTextStream ts(&outFile);
+	ts << txt << endl;
+#endif
+}
+
 void DkUtils::initializeDebug() {
 
 	if (DkSettingsManager::param().app().useLogFile)
@@ -555,15 +569,6 @@ QWidget * DkUtils::getMainWindow() {
 	}
 
 	return win;
-}
-
-void DkUtils::showViewportMessage(const QString & msg) {
-
-	DkNoMacs* nmc = dynamic_cast<DkNoMacs*>(getMainWindow());
-
-	if (nmc && nmc->viewport())
-		nmc->viewport()->infoSignal(msg);
-
 }
 
 void DkUtils::mSleep(int ms) {
@@ -896,66 +901,13 @@ bool DkUtils::moveToTrash(const QString& filePath) {
 
 	return retVal == 0;		// true if no error code
 
-//#elif Q_OS_LINUX
-//	bool TrashInitialized = false;
-//	QString TrashPath;
-//	QString TrashPathInfo;
-//	QString TrashPathFiles;
-//
-//	if( !TrashInitialized ) {
-//		QStringList paths;
-//		const char* xdg_data_home = getenv( "XDG_DATA_HOME" );
-//		if( xdg_data_home ){
-//			qDebug() << "XDG_DATA_HOME not yet tested";
-//			QString xdgTrash( xdg_data_home );
-//			paths.append( xdgTrash + "/Trash" );
-//		}
-//		QString home = QStandardPaths::writableLocation( QStandardPaths::HomeLocation );
-//		paths.append( home + "/.local/share/Trash" );
-//		paths.append( home + "/.trash" );
-//		foreach( QString path, paths ){
-//			if( TrashPath.isEmpty() ){
-//				QDir dir( path );
-//				if( dir.exists() ){
-//					TrashPath = path;
-//				}
-//			}
-//		}
-//		if (TrashPath.isEmpty())
-//			return false;
-//		TrashPathInfo = TrashPath + "/info";
-//		TrashPathFiles = TrashPath + "/files";
-//		if (!QDir(TrashPathInfo).exists() || !QDir(TrashPathFiles).exists())
-//			return false;
-//		TrashInitialized = true;
-//	}
-//
-//	QString info;
-//	info += "[Trash Info]\nPath=";
-//	info += filePath;
-//	info += "\nDeletionDate=";
-//	info += QDateTime::currentDateTime().toString("yyyy-MM-ddThh:mm:ss.zzzZ");
-//	info += "\n";
-//	QString trashname = fileInfo.fileName();
-//	QString infopath = TrashPathInfo + "/" + trashname + ".trashinfo";
-//	QString trashPath = TrashPathFiles + "/" + trashname;
-//	int nr = 1;
-//	while( QFileInfo( infopath ).exists() || QFileInfo( trashPath ).exists() ){
-//		nr++;
-//		trashname = fileInfo.baseName() + "." + QString::number( nr );
-//		if( !fileInfo.completeSuffix().isEmpty() ){
-//			trashname += QString( "." ) + fileInfo.completeSuffix();
-//		}
-//		infopath = TrashPathInfo + "/" + trashname + ".trashinfo";
-//		trashPath = TrashPathFiles + "/" + trashname;
-//	}
-//	QDir dir;
-//	if( !dir.rename( filePath, trashPath )) {
-//		return false;
-//	}
-//	File infofile;
-//	infofile.createUtf8( infopath, info );
-//	return true;
+#elif defined(Q_OS_LINUX)
+
+	QString trashFilePath = QDir::homePath() + "/.local/share/Trash/files/";    // trash file path contain delete files
+
+	QDir file;
+	return file.rename(filePath, trashFilePath + fileInfo.fileName());  // rename(file old path, file trash path)
+
 #else
 	QFile fileHandle(filePath);
 	return fileHandle.remove();

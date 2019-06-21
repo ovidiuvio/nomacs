@@ -53,6 +53,7 @@ class QVBoxLayout;
 class QGridLayout;
 class QStandardItem;
 class QStandardItemModel;
+class QLineEdit;
 
 namespace nmc {
 
@@ -88,7 +89,7 @@ protected:
 	QIcon mIcon;
 };
 
-class DllCoreExport DkPreferenceWidget : public DkWidget {
+class DllCoreExport DkPreferenceWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -116,7 +117,7 @@ protected:
 	QVBoxLayout* mTabLayout = 0;
 };
 
-class DkGroupWidget : public QWidget {
+class DkGroupWidget : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -126,14 +127,14 @@ public:
 	void addSpace();
 
 protected:
-	void paintEvent(QPaintEvent* event);
+	void paintEvent(QPaintEvent* event) override;
 	void createLayout();
 
 	QString mTitle;
 	QVBoxLayout* mContentLayout = 0;
 };
 
-class DkGeneralPreference : public QWidget {
+class DkGeneralPreference : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -169,12 +170,12 @@ signals:
 
 protected:
 	void createLayout();
-	void paintEvent(QPaintEvent* ev);
+	void paintEvent(QPaintEvent* ev) override;
 
 	QStringList mLanguages;
 };
 
-class DkDisplayPreference : public QWidget {
+class DkDisplayPreference : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -193,17 +194,23 @@ public slots:
 	void on_alwaysAnimate_toggled(bool checked) const;
 	void on_showCrop_toggled(bool checked) const;
 	void on_showScrollBars_toggled(bool checked) const;
+	void on_useZoomLevels_toggled(bool checked) const;
+	void on_zoomLevels_editingFinished() const;	
+	void on_zoomLevelsDefault_clicked() const;
 
 signals:
 	void infoSignal(const QString& msg) const;
 
 protected:
 	void createLayout();
-	void paintEvent(QPaintEvent* ev);
+	void paintEvent(QPaintEvent* ev) override;
+
+	QWidget* mZoomLevels = 0;
+	QLineEdit* mZoomLevelsEdit = 0;
 
 };
 
-class DkFilePreference : public QWidget {
+class DkFilePreference : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -215,17 +222,18 @@ public slots:
 	void on_skipBox_valueChanged(int value) const;
 	void on_cacheBox_valueChanged(int value) const;
 	void on_historyBox_valueChanged(int value) const;
+	void on_saveGroup_buttonClicked(int buttonId) const;
 
 signals:
 	void infoSignal(const QString& msg) const;
 
 protected:
 	void createLayout();
-	void paintEvent(QPaintEvent* ev);
+	void paintEvent(QPaintEvent* ev) override;
 
 };
 
-class DkFileAssociationsPreference : public QWidget {
+class DkFileAssociationsPreference : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -234,13 +242,14 @@ public:
 public slots:
 	void on_fileModel_itemChanged(QStandardItem*);
 	void on_openDefault_clicked() const;
+	void on_associateFiles_clicked();
 
 signals:
    void infoSignal(const QString& msg) const;
 
 protected:
 	void createLayout();
-	void paintEvent(QPaintEvent* ev);
+	void paintEvent(QPaintEvent* ev) override;
 
 	bool checkFilter(const QString& cFilter, const QStringList& filters) const;
 	QList<QStandardItem*> getItems(const QString& filter, bool browse, bool reg);
@@ -250,7 +259,7 @@ protected:
 	QStandardItemModel* mModel = 0;
 };
 
-class DkAdvancedPreference : public QWidget {
+class DkAdvancedPreference : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -271,10 +280,10 @@ signals:
 
 protected:
 	void createLayout();
-	void paintEvent(QPaintEvent* ev);
+	void paintEvent(QPaintEvent* ev) override;
 };
 
-class DkEditorPreference : public QWidget {
+class DkEditorPreference : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -291,24 +300,7 @@ protected:
 	void createLayout();
 
 	DkSettingsWidget* mSettingsWidget;
-	void paintEvent(QPaintEvent* ev);
+	void paintEvent(QPaintEvent* ev) override;
 };
-
-//class DkDummyPreference : public QWidget {
-//	Q_OBJECT
-//
-//public:
-//	DkDummyPreference(QWidget* parent = 0);
-//
-//public slots:
-//
-//signals:
-//   void infoSignal(const QString& msg) const;
-//
-//protected:
-//	void createLayout();
-//	void paintEvent(QPaintEvent* ev);
-//
-//};
 
 }

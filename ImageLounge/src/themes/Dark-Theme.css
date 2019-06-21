@@ -1,0 +1,253 @@
+
+/* overload color settings of nomacs */
+--nomacs-color-def
+HIGHLIGHT_COLOR: #ffcc00;
+HUD_BACKGROUND_COLOR: #aa000000;
+HUD_FOREGROUND_COLOR: #ddd;
+ICON_COLOR: #ddd;
+
+FOREGROUND_COLOR: #ddd;
+BACKGROUND_COLOR: #333;
+--nomacs-color-def
+
+/* general styles */
+QPushButton {
+	border: 1px solid #666;
+	padding: 4px 20px;
+	background-color: transparent;
+}
+ 
+QPushButton:flat {
+    border: none; /* no border for a flat push button */
+}
+
+nmc--DkBatchTabButton {
+	min-width: 250px;
+	padding: 10px 20px;
+	padding-bottom: 30px;
+}
+
+QPushButton#DkTabEntryWidget:checked,
+nmc--DkBatchTabButton:checked {
+	background-color: rgba(0, 0, 0, 80);
+	border: none;	/* clear border styles first */
+	border-left: 4px solid HIGHLIGHT_COLOR;
+}
+
+QLineEdit {
+	background: rgba(255, 255, 255, 60);
+	color: FOREGROUND_COLOR;
+	border: 1px solid #666;
+	selection-background-color: HIGHLIGHT_COLOR;
+}
+
+/* header view */
+QHeaderView,
+QHeaderView::section {
+	background: BACKGROUND_COLOR;
+}
+
+QHeaderView::section {
+	background: BACKGROUND_COLOR;
+	padding: 2px;
+	border: none;
+}
+
+QTextEdit,
+QTreeView,
+QTableView,
+QListView {
+	border: 1px solid #444;
+}
+
+QListView#resultListView,
+QTextEdit,
+QAbstractItemView,
+QTreeView::item,
+QTableView::item,
+QListView::item {
+	color: FOREGROUND_COLOR;
+}
+
+QComboBox {
+	border: 1px solid #444;
+}
+
+QComboBox QListView::item {
+	padding: 2px;
+}
+
+QComboBox QListView::item:selected { 
+	color: BACKGROUND_COLOR;
+	background-color: HIGHLIGHT_COLOR; 
+}
+
+QComboBox::drop-down {
+	image: url(:/nomacs/img/down-white.svg);
+	border: none;
+	width: 16px;
+	height: 16px;
+	background-color: none;
+}
+
+QComboBox::drop-down:hover {
+	background-color: rgba(255, 255, 255, 30);
+}
+
+QComboBox,
+QDoubleSpinBox,
+QSpinBox {
+	color: FOREGROUND_COLOR;
+	background: BACKGROUND_COLOR;
+}
+
+QToolBar {
+	border-bottom: 1px solid #444;
+}
+
+QScrollArea {
+	border: none;
+}
+
+nmc--DkMetaDataSelection QScrollArea QWidget {
+	background: #444;
+}
+
+QLabel#DkMetadataValueLabel {
+	color: #ddd;
+}
+
+QToolBar,
+QMenu,
+QMenuBar,
+QTabBar::tab {
+    background: BACKGROUND_COLOR;
+}
+
+QPushButton:hover,
+QToolButton:hover,
+QMenuBar::item:selected,
+QMenu::item:selected,
+QTreeView::item:hover,
+QListView::item:hover,
+QTabBar::tab:selected {
+    background: #666;
+}
+
+QScrollBar:vertical {background: rgba(0,0,0,0); width: 11px; margin: 0 0 0 0;}
+QScrollBar::handle:vertical {	background: #ddd; min-height: 0px;}
+QScrollBar::add-line:vertical {height: 0px;}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {	background: rgba(0,0,0,0); width: 1px;}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+QScrollBar:horizontal {background: rgba(0,0,0,0); height: 11px; margin: 0 0 0 0;}
+QScrollBar::handle:horizontal {background: #ddd; min-width: 0px;}
+QScrollBar::add-line:horizontal {width: 0px;}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {background: rgba(0,0,0,0); height: 1px;}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {width: 0;}
+
+QLabel#batchContentTitle,
+QDockWidget {
+	color: #fff;
+}
+
+QLabel#batchContentInfo,
+QLabel#statusBarLabel,
+QPushButton#infoButton,
+QListView#resultListView[empty="true"] {
+	color: #ccc; 
+}
+
+QListWidget#historyList::item:disabled {
+	color: #aaa;
+}
+
+nmc--DkGroupWidget {
+	color: #f00;
+}
+
+QLabel#subTitle,
+nmc--DkGroupWidget QCheckBox,
+nmc--DkGroupWidget QRadioButton,
+nmc--DkGroupWidget QLineEdit,
+nmc--DkGroupWidget QLabel {
+	color: #ccc;
+}
+
+/* profile widget */
+nmc--DkProfileSummaryWidget {
+	background-color: #444;
+}
+
+/* todos */
+QLabel#DkDecentInfo {
+	color: #fff;
+}
+
+QLineEdit#DkWarningEdit {
+	color: #fff;
+}
+
+QLabel#DkDecentInfo[warning="true"],
+QLineEdit#DkWarningEdit[error="true"] {
+	color: #ce5a5a;
+}
+
+nmc--DkFolderScrollBar {
+	border: 1px solid #444;
+}
+
+nmc--DkCentralWidget {
+	border: none;
+}
+
+/* DkRecentFiles */
+nmc--DkRecentFilesWidget QScrollArea {
+	border: none;
+	background-color: transparent;
+}
+
+nmc--DkRecentDirWidget {
+	background-color: rgba(0, 0, 0, 200);
+	border: 1px solid rgba(0, 0, 0, 255);
+}
+
+nmc--DkRecentDirWidget:hover {
+	background-color: rgba(255, 255, 255, 30);
+	border: 1px solid rgba(255, 255, 255, 60);
+}
+
+QLabel#recentFilesTitle {
+	color: #fff;
+}
+
+QLabel#recentFilesPath {
+	color: #ccc;
+}
+
+nmc--DkThumbPreviewLabel:hover {
+	border: 1px solid HIGHLIGHT_COLOR;
+}
+
+QMenu::separator {
+	border-top: 1px solid #666;
+}
+
+QPushButton#displayButton {
+	border: 1px solid #ddd;
+	background-color: #000;
+	
+	color: #fff;
+}
+
+QTabBar::close-button {
+    image: url(:/nomacs/img/close-white.svg);
+}
+
+QTabBar::close-button:hover {
+	image: url(:/nomacs/img/close-white-hover.svg);
+}
+
+nmc--DkThumbPreviewLabel[empty="true"] {
+	background-color: #333;
+}

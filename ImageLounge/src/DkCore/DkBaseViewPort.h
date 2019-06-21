@@ -34,6 +34,7 @@
 #pragma warning(disable: 4251)	// TODO: remove
 
 #include "DkImageStorage.h"
+#include "DkSettings.h"
 
 #ifndef DllCoreExport
 #ifdef DK_CORE_DLL_EXPORT
@@ -49,6 +50,7 @@
 class QGestureEvent;
 class QShortcut;
 class QSvgRenderer;
+class QSettings;
 
 namespace nmc {
 
@@ -72,8 +74,10 @@ public:
 	DkBaseViewPort(QWidget *parent = 0);
 	virtual ~DkBaseViewPort();
 
-	void zoomConstraints(float minZoom = 0.01f, float maxZoom = 50.0f);
-	virtual void zoom(float factor = 0.5, QPointF center = QPointF(-1,-1));
+	void zoomConstraints(double minZoom = 0.01, double maxZoom = 100.0);
+	virtual void zoom(double factor = 0.5, const QPointF& center = QPointF(-1,-1));
+	virtual void zoomLeveled(double factor = 0.5, const QPointF& center = QPointF(-1, -1));
+	
 	void setForceFastRendering(bool fastRendering = true) {
 		mForceFastRendering = fastRendering;
 	};
@@ -116,10 +120,9 @@ public:
 	virtual bool imageInside() const;
 
 signals:
-	void enableNoImageSignal(bool enable) const;
-	void showStatusBar(bool show, bool permanent) const;
 	void newImageSignal(QImage* img) const;
 	void keyReleaseSignal(QKeyEvent* event) const;	// make key presses available
+	void imageUpdated() const;	// triggers on zoom/pan
 
 public slots:
 	virtual void togglePattern(bool show);
@@ -140,6 +143,7 @@ public slots:
 
 	virtual bool unloadImage(bool fileChange = true);
 	virtual void setImage(QImage newImg);
+	void hideCursor();
 	
 protected:
 	virtual bool event(QEvent *event) override;
@@ -154,7 +158,6 @@ protected:
 	virtual void paintEvent(QPaintEvent* event) override;
 
 	virtual bool gestureEvent(QGestureEvent* event);
-	virtual void swipeAction(int) {};
 
 	QVector<QShortcut*> mShortcuts;		// TODO: add to actionManager
 
@@ -171,11 +174,12 @@ protected:
 	QRectF mImgViewRect;
 	QRectF mViewportRect;
 	QRectF mImgRect;
+	QTimer* mHideCursorTimer;
 
 	QPointF mPanControl;	// controls how far we can pan outside an image
 	QPointF mPosGrab;
-	float mMinZoom = 0.01f;
-	float mMaxZoom = 100;
+	double mMinZoom = 0.01;
+	double mMaxZoom = 100;
 
 	// TODO: test if gestures are fully supported in Qt5 then remove this
 	float mLastZoom;
@@ -195,6 +199,8 @@ protected:
 	virtual void controlImagePosition(float lb = -1, float ub = -1);
 	virtual void centerImage();
 	virtual void changeCursor();
+	void zoomToPoint(double factor, const QPointF& pos, QTransform& matrix) const;
+
 };
 
 }

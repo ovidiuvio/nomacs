@@ -13,13 +13,14 @@ nomacs is a free, open source image viewer, which supports multiple platforms. Y
 - [Exiv2](https://github.com/nomacs/exiv2) (>= 0.26)
 - [OpenCV](https://github.com/TUWien/opencv) (>= 3.4) _optional_
 - [LibRaw](https://github.com/nomacs/LibRaw) (>= 0.17) _optional_
+- [QuaZip](https://github.com/nomacs/quazip) (>= 0.7.6) _optional_
 - `Python` (>= 3.6) for build scripts
 
 ### Compile LibRaw
 
 - only needed if ENABLE_RAW is checked
-- checkout [libraw](https://github.com/nomacs/LibRaw)
-- switch to 0.XX-stable branch
+- clone [libraw](https://github.com/nomacs/LibRaw)
+- checkout to the latest `0.XX-stable` branch
 - follow the build instructions
 - in the nomacs `CMakeUserPaths.cmake`, add the build path to `${CMAKE_PREFIX_PATH}`
 
@@ -46,37 +47,33 @@ nomacs is a free, open source image viewer, which supports multiple platforms. Y
 Get the required packages:
 
 ``` console
-sudo apt-get install debhelper cdbs qt5-qmake qttools5-dev-tools qt5-default qttools5-dev libqt5svg5-dev qt5-image-formats-plugins libexiv2-dev libraw-dev libopencv-dev cmake libtiff-dev libquazip-dev libwebp-dev git build-essential lcov libzip-dev
+sudo apt-get install debhelper cdbs qt5-qmake qttools5-dev-tools qt5-default qttools5-dev libqt5svg5-dev qt5-image-formats-plugins libexiv2-dev libraw-dev libopencv-dev cmake libtiff-dev libquazip5-dev libwebp-dev git build-essential lcov libzip-dev
 ```
 
 Get the nomacs sources from github:
-
 ``` console
 git clone https://github.com/nomacs/nomacs.git
 ```
 
 This will by default place the source into ~/nomacs
-
 Go to the nomacs/ImageLounge directory and run `cmake` to get the Makefiles:
-
 ``` console
-cmake .
+mkdir build
+cd build
+cmake -DUSE_SYSTEM_QUAZIP=ON ..
 ```
 
 Compile nomacs:
-
 ``` console
 make
 ```
 
-You will now have a binary (~/nomacs/nomacs), which you can test (or use directly). To install it to /usr/local/bin, use:
-
+You will now have a binary (~/nomacs/build/nomacs), which you can test (or use directly). To install it to /usr/local/bin, use:
 ``` console
 sudo make install
 ```
 
 note that you have to execute
-
 ``` console
 sudo ldconfig
 ```
@@ -97,7 +94,7 @@ Install required dependencies:
 $ brew install qt5 exiv2 opencv libraw quazip cmake pkg-config
 ```
 
-Go to the `nomacs` directory and run cmake to get the Makefiles
+Go to the `nomacs` directory and run cmake to get the Makefiles:
 
 ``` console
 $ mkdir build
@@ -119,8 +116,7 @@ $ sudo make install
 
 ## Links
 
-- [nomacs.org](http://nomacs.org)
-- [Bugtracker](http://www.nomacs.org/redmine/projects/nomacs)
+- [nomacs.org](https://nomacs.org)
 - [GitHub](https://github.com/nomacs)
 
 [![nomacs-icon](https://nomacs.org/startpage/nomacs.svg)](https://nomacs.org)

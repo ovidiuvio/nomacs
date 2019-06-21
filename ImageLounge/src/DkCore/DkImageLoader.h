@@ -96,6 +96,7 @@ public:
 
 	QString getDirPath() const;
 	QString getSavePath() const;
+	QString getCopyPath() const;
 	void setDir(const QString& dir);
 	void setSaveDir(const QString& dir);
 	
@@ -141,6 +142,7 @@ signals:
 	void showInfoSignal(const QString& msg, int time = 3000, int position = 0) const;
 	void updateDirSignal(QVector<QSharedPointer<DkImageContainerT> > images) const;
 	void imageHasGPSSignal(bool hasGPS) const;
+	void loadImageToTab(const QString& filePath) const;
 
 public slots:
 	void undo();
@@ -149,6 +151,7 @@ public slots:
 	void directoryChanged(const QString& path = QString());
 	void saveFileWeb(const QImage& saveImg);
 	void saveUserFileAs(const QImage& saveImg, bool silent);
+	void copyUserFile();
 	void saveFile(const QString& filename, const QImage& saveImg = QImage(), const QString& fileFilter = "", int compression = -1, bool threaded = true);
 	void load(QSharedPointer<DkImageContainerT> image = QSharedPointer<DkImageContainerT>());
 	void load(const QString& filePath);
@@ -166,10 +169,11 @@ public slots:
 	// new slots
 	void currentImageUpdated() const;
 	void imageLoaded(bool loaded = false);
-	void imageSaved(const QString& file, bool saved = true);
+	void imageSaved(const QString& file, bool saved = true, bool loadToTab = true);
 	void imagesSorted();
 	bool unloadFile();
 	void reloadImage();
+	void showOnMap();
 
 protected:
 	// functions
@@ -189,6 +193,7 @@ protected:
 	bool mTimerBlockedUpdate = false;
 	QString mCurrentDir;
 	QString mSaveDir;
+	QString mCopyDir;
 	QFileSystemWatcher* mDirWatcher = 0;
 	QStringList mSubFolders;
 	QVector<QSharedPointer<DkImageContainerT > > mImages;

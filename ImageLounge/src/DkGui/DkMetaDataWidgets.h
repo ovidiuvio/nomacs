@@ -31,6 +31,7 @@
 #include <QTextEdit>
 #include <QAbstractTableModel>
 #include <QDockWidget>
+#include <QSortFilterProxyModel>
 #pragma warning(pop)		// no warnings from includes - end
 
 #include "DkBaseWidgets.h"
@@ -43,6 +44,7 @@ class QPushButton;
 class QGridLayout;
 class QCheckBox;
 class QVBoxLayout;
+class QLineEdit;
 
 namespace nmc {
 
@@ -77,6 +79,18 @@ protected:
 	void createItem(const QString& key, const QString& keyName, const QString& value);
 };
 
+class DkMetaDataProxyModel : public QSortFilterProxyModel {
+	Q_OBJECT
+
+public:
+	DkMetaDataProxyModel(QObject * parent = 0);
+	virtual ~DkMetaDataProxyModel() {}
+
+protected:
+	virtual bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
+
+};
+
 class DkMetaDataDock : public DkDockWidget {
 	Q_OBJECT
 
@@ -87,6 +101,7 @@ public:
 public slots:
 	void setImage(QSharedPointer<DkImageContainerT> imgC);
 	void thumbLoaded(bool loaded);
+	void on_filter_textChanged(const QString& filterText);
 
 protected:
 	void createLayout();
@@ -99,13 +114,15 @@ protected:
 
 	QSharedPointer<DkImageContainerT> mImgC;
 	QTreeView* mTreeView = 0;
+	DkMetaDataProxyModel* mProxyModel = 0;
+	QLineEdit* mFilterEdit = 0;
 	DkMetaDataModel* mModel = 0;
 	QLabel* mThumbNailLabel = 0;
 	QSharedPointer<DkThumbNailT> mThumb;
 	QStringList mExpandedNames;
 };
 
-class DkMetaDataSelection : public QWidget {
+class DkMetaDataSelection : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -134,7 +151,7 @@ protected:
 	QGridLayout* mLayout;
 };
 
-class DkMetaDataHUD : public DkWidget {
+class DkMetaDataHUD : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -165,7 +182,7 @@ public slots:
 	void changeNumColumns();
 	void setToDefault();
 	void newPosition();
-	virtual void setVisible(bool visible, bool saveSetting = true);
+	virtual void setVisible(bool visible, bool saveSetting = true) override;
 
 signals:
 	void positionChangeSignal(int newPos) const;
@@ -179,7 +196,7 @@ protected:
 	QLabel* createKeyLabel(const QString& key);
 	QLabel* createValueLabel(const QString& val);
 
-	void contextMenuEvent(QContextMenuEvent *event);
+	void contextMenuEvent(QContextMenuEvent *event) override;
 
 	// current metadata
 	QSharedPointer<DkMetaDataT> mMetaData;
@@ -211,8 +228,8 @@ signals:
 	void focusLost() const;
 
 protected:
-	void focusOutEvent(QFocusEvent* focusEvent);
-	void paintEvent(QPaintEvent* e);
+	void focusOutEvent(QFocusEvent* focusEvent) override;
+	void paintEvent(QPaintEvent* e) override;
 };
 
 class DkCommentWidget : public DkFadeLabel {

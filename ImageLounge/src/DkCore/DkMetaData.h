@@ -35,13 +35,24 @@
 //code for metadata crop:
 #include "DkMath.h"
 
+#if defined(__clang__)
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #ifdef HAVE_EXIV2_HPP
 #include <exiv2/exiv2.hpp>
 #else
+
+// fixes wrong include of winsock2 in exiv2 0.26 (this is fixed in the current exiv2 master)
+#ifdef WIN32
+#define _WINSOCKAPI_
+#endif
+
 #include <exiv2/xmpsidecar.hpp>
 #include <exiv2/image.hpp>
 #include <exiv2/preview.hpp>
 #include <iomanip>
+
 #endif
 #pragma warning(pop)
 
@@ -160,15 +171,32 @@ public:
 	static DkMetaDataHelper& getInstance() {
 
 		static DkMetaDataHelper instance;
-
 		return instance;
 	}
+
+	//enums for checkboxes - divide in camera data and description
+	enum ExifKeys {
+		key_size,
+		key_orientation,
+		key_make,
+		key_model,
+		key_aperture,
+		key_iso,
+		key_flash,
+		key_focal_length,
+		key_exposure_mode,
+		key_exposure_time,
+		key_compression,
+
+		key_end
+	};
 
 	QString getApertureValue(QSharedPointer<DkMetaDataT> metaData) const;
 	QString getFocalLength(QSharedPointer<DkMetaDataT> metaData) const;
 	QString getExposureTime(QSharedPointer<DkMetaDataT> metaData) const;
 	QString getExposureMode(QSharedPointer<DkMetaDataT> metaData) const;
 	QString getFlashMode(QSharedPointer<DkMetaDataT> metaData) const;
+	QString getCompression(QSharedPointer<DkMetaDataT> metaData) const;
 	QString getGpsCoordinates(QSharedPointer<DkMetaDataT> metaData) const;
 	QString getGpsAltitude(const QString& val) const;
 	QStringList convertGpsCoordinates(const QString& coordString) const;
@@ -184,6 +212,8 @@ public:
 	QStringList getAllExposureModes() const;
 	QMap<int, QString> getAllFlashModes() const;
 
+	static void initialize();
+
 protected:
 	DkMetaDataHelper() { init(); };
 	DkMetaDataHelper(DkMetaDataHelper const&);		// hide
@@ -198,6 +228,7 @@ protected:
 
 	QStringList mExposureModes;
 	QMap<int, QString> mFlashModes;
+	QMap<int, QString> mCompressionModes;
 };
 
 }

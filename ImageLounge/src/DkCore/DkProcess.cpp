@@ -35,6 +35,8 @@
 #include "DkManipulators.h"
 #include "DkTimer.h"
 
+#include "DkMetaData.h"
+
 #pragma warning(push, 0)	// no warnings from includes - begin
 #include <QFuture>
 #include <QFutureWatcher>
@@ -119,7 +121,7 @@ QSharedPointer<DkAbstractBatch> DkAbstractBatch::createFromName(const QString& s
 
 // DkTransformBatch --------------------------------------------------------------------
 DkBatchTransform::DkBatchTransform() {
-	mResizeIplMethod = DkImage::ipl_area;	// define here because of included
+	mResizeIplMethod = DkImage::ipl_area;	// define here because of includes
 }
 
 QString DkBatchTransform::name() const {
@@ -361,11 +363,11 @@ bool DkBatchTransform::prepareProperties(const QSize& imgSize, QSize& size, floa
 
 	if (sf > 1.0 && mResizeProperty == resize_prop_decrease_only) {
 
-		logStrings.append(QObject::tr("%1 I need to increase the image, but the option is set to decrease only -> skipping.").arg(name()));
+		logStrings.append(QObject::tr("%1 I need to increase the image size, but the option is set to 'decrease only' -> skipping.").arg(name()));
 		return false;
 	}
 	else if (sf < 1.0f && mResizeProperty == resize_prop_increase_only) {
-		logStrings.append(QObject::tr("%1 I need to decrease the image, but the option is set to increase only -> skipping.").arg(name()));
+		logStrings.append(QObject::tr("%1 I need to decrease the image size, but the option is set to 'increase only' -> skipping.").arg(name()));
 		return false;
 	}
 	else if (sf == 1.0f) {
@@ -748,6 +750,9 @@ bool DkBatchProcess::compute() {
 	// do the work
 	process();
 
+	// delete the original file if the user requested it
+	deleteOriginalFile();
+
 	return mFailure == 0;
 }
 
@@ -796,6 +801,11 @@ bool DkBatchProcess::process() {
 		return true;
 	}
 
+	// udpate metadata
+	if (updateMetaData(imgC->getMetaData().data()))
+		mLogStrings.append(QObject::tr("Original filename added to Exif"));
+
+	// save the image
 	if (imgC->saveImage(mSaveInfo.outputFilePath(), mSaveInfo.compression())) {
 		mLogStrings.append(QObject::tr("%1 saved...").arg(mSaveInfo.outputFilePath()));
 	}
@@ -821,6 +831,14 @@ bool DkBatchProcess::renameFile() {
 
 	QFile file(mSaveInfo.inputFilePath());
 
+	QSharedPointer<DkMetaDataT> md(new DkMetaDataT());
+	md->readMetaData(mSaveInfo.inputFilePath());
+
+	if (updateMetaData(md.data())) {
+		if (md->saveMetaData(mSaveInfo.inputFilePath()))
+			mLogStrings.append(QObject::tr("Original filename added to Exif"));
+	}
+
 	// Note: if two images are renamed at the same time to the same name, one image is lost -> see Qt comment Race Condition
 	if (!file.rename(mSaveInfo.outputFilePath())) {
 		mLogStrings.append(QObject::tr("Error: could not rename file"));
@@ -833,6 +851,25 @@ bool DkBatchProcess::renameFile() {
 	return true;
 }
 
+bool DkBatchProcess::updateMetaData(DkMetaDataT * md) {
+	
+	if (!md)
+		return false;
+
+	if (!md->isLoaded())
+		return false;
+
+	QString ifn = mSaveInfo.inputFileInfo().fileName();
+	if (ifn != mSaveInfo.outputFileInfo().fileName() &&
+		md->getExifValue("ImageDescription").isEmpty()) {
+
+		if (md->setExifValue("Exif.Image.ImageDescription", ifn))
+			return true;
+	}
+
+	return false;
+}
+
 bool DkBatchProcess::copyFile() {
 
 	QFile file(mSaveInfo.inputFilePath());
@@ -842,10 +879,16 @@ bool DkBatchProcess::copyFile() {
 		return false;
 	}
 
-	if (QFileInfo(mSaveInfo.outputFilePath()).exists() && mSaveInfo.mode() == DkSaveInfo::mode_overwrite) {
-		if (!deleteOrRestoreExisting())
-			return false;	// early break
+	// report we could not back-up & break here
+	if (!prepareDeleteExisting()) {
+		mFailure++;
+		return false;
 	}
+
+	QSharedPointer<DkMetaDataT> md(new DkMetaDataT());
+	md->readMetaData(mSaveInfo.inputFilePath());
+
+	bool exifUpdated = updateMetaData(md.data());
 
 	if (!file.copy(mSaveInfo.outputFilePath())) {
 		mLogStrings.append(QObject::tr("Error: could not copy file"));
@@ -854,8 +897,17 @@ bool DkBatchProcess::copyFile() {
 		mLogStrings.append(file.errorString());
 		return false;
 	}
-	else
+	else {
+		if (exifUpdated && md->saveMetaData(mSaveInfo.outputFilePath()))
+			mLogStrings.append(QObject::tr("Original filename added to Exif"));
+
 		mLogStrings.append(QObject::tr("Copying: %1 -> %2").arg(mSaveInfo.inputFilePath()).arg(mSaveInfo.outputFilePath()));
+	}
+
+	if (!deleteOrRestoreExisting()) {
+		mFailure++;
+		return false;
+	}
 
 	return true;
 }
@@ -905,7 +957,7 @@ bool DkBatchProcess::deleteOrRestoreExisting() {
 		QFile file(mSaveInfo.backupFilePath());
 
 		if (!file.rename(mSaveInfo.outputFilePath())) {
-			mLogStrings.append(QObject::tr("Ui - a lot of things went wrong sorry, your original file can be found here: %1").arg(mSaveInfo.backupFilePath()));
+			mLogStrings.append(QObject::tr("Ui - a lot of things went wrong. Your original file can be found here: %1").arg(mSaveInfo.backupFilePath()));
 			mLogStrings.append(file.errorString());
 			return false;
 		}

@@ -62,13 +62,13 @@ public:
 
 	~DkMessageBox();
 
-	virtual void setVisible(bool visible);
+	virtual void setVisible(bool visible) override;
 	void setDefaultButton(QMessageBox::StandardButton button);
 	void setButtonText(QMessageBox::StandardButton button, const QString &text);
 
 public slots:
 	void buttonClicked(QAbstractButton* button);
-	int exec();
+	int exec() override;
 
 protected:
 

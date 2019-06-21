@@ -386,8 +386,6 @@ void DkPluginContainer::run() {
 		}
 		
 		vPlugin->setVisible(true);
-
-		connect(vPlugin->getViewPort(), SIGNAL(showToolBar(QToolBar*, bool)), vPlugin->getMainWindow(), SLOT(showToolBar(QToolBar*, bool)));
 		emit runPlugin(vPlugin, false);
 	}
 	else if ((p && p->interfaceType() == DkPluginInterface::interface_basic) || p->interfaceType() == DkPluginInterface::interface_batch) {
@@ -601,7 +599,7 @@ QMap<QString, QString> DkPluginManagerDialog::getPreviouslyInstalledPlugins() {
 /**********************************************************************************
  * DkPluginTableWidget : Widget with table views containing plugin data
  **********************************************************************************/
-DkPluginTableWidget::DkPluginTableWidget(QWidget* parent) : QWidget(parent) {
+DkPluginTableWidget::DkPluginTableWidget(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);

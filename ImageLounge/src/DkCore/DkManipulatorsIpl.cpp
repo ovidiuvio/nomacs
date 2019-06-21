@@ -143,6 +143,7 @@ QImage DkTinyPlanetManipulator::apply(const QImage & img) const {
 	DkImage::tinyPlanet(imgR, size(), angle()*DK_DEG2RAD, s, inverted());
 	return imgR;
 #else
+	Q_UNUSED(img);
 	return QImage();	// trigger warning
 #endif
 }
@@ -255,6 +256,50 @@ void DkRotateManipulator::setAngle(int angle) {
 int DkRotateManipulator::angle() const {
 	return mAngle;
 }
+
+// -------------------------------------------------------------------- DkResizeManipulator 
+DkResizeManipulator::DkResizeManipulator(QAction * action) : DkBaseManipulatorExt(action) {
+}
+
+QImage DkResizeManipulator::apply(const QImage & img) const {
+
+	if (mScaleFactor == 1.0)
+		return img;
+
+	return DkImage::resizeImage(img, QSize(), mScaleFactor, mInterpolation, mCorrectGamma);
+}
+
+QString DkResizeManipulator::errorMessage() const {
+	return QObject::tr("Cannot resize image");
+}
+
+void DkResizeManipulator::setScaleFactor(double sf) {
+	mScaleFactor = sf;
+	action()->trigger();
+}
+
+double DkResizeManipulator::scaleFactor() const {
+	return mScaleFactor;
+}
+
+void DkResizeManipulator::setInterpolation(int ipl) {
+	mInterpolation = ipl;
+	action()->trigger();
+}
+
+int DkResizeManipulator::interpolation() const {
+	return mInterpolation;
+}
+
+void DkResizeManipulator::setCorrectGamma(bool cg) {
+	mCorrectGamma = cg;
+	action()->trigger();
+}
+
+bool DkResizeManipulator::correctGamma() const {
+	return mCorrectGamma;
+}
+
 
 // Rotate Manipulator --------------------------------------------------------------------
 DkThresholdManipulator::DkThresholdManipulator(QAction * action) : DkBaseManipulatorExt(action) {
@@ -394,6 +439,32 @@ void DkExposureManipulator::setGamma(double gamma) {
 
 double DkExposureManipulator::gamma() const {
 	return mGamma;
+}
+
+// -------------------------------------------------------------------- DkColorManipulator 
+DkColorManipulator::DkColorManipulator(QAction * action) : DkBaseManipulatorExt(action) {
+}
+
+QImage DkColorManipulator::apply(const QImage & img) const {
+	
+	return DkImage::bgColor(img, color());
+}
+
+QString DkColorManipulator::errorMessage() const {
+	return QObject::tr("Cannot draw background color");
+}
+
+void DkColorManipulator::setColor(const QColor & col) {
+	
+	if (mColor == col)
+		return;
+	
+	mColor = col;
+	action()->trigger();
+}
+
+QColor DkColorManipulator::color() const {
+	return mColor;
 }
 
 }

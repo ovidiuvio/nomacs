@@ -32,6 +32,7 @@
 #pragma warning(pop)		// no warnings from includes - end
 
 #include "DkImageContainer.h"
+#include "DkBaseWidgets.h"
 
 #pragma warning(disable: 4251)	// TODO: remove
 
@@ -59,7 +60,7 @@ class DkViewPort;
 class DkPreferenceWidget;
 class DkProgressBar;
 
-class DkTabInfo : public QObject {
+class DllCoreExport DkTabInfo : public QObject {
 	Q_OBJECT
 
 public:
@@ -117,13 +118,14 @@ class DkViewPort;
 class DkThumbScrollWidget;
 class DkRecentFilesWidget;
 
-class DllCoreExport DkCentralWidget : public QWidget {
+class DllCoreExport DkCentralWidget : public DkWidget {
 	Q_OBJECT
 
 public:
-	DkCentralWidget(DkViewPort* viewport, QWidget* parent = 0);
+	DkCentralWidget(QWidget* parent = 0);
 	~DkCentralWidget();
 
+	bool hasViewPort() const;
 	DkViewPort* getViewPort() const;
 	DkThumbScrollWidget* getThumbScrollWidget() const;
 	QString getCurrentDir() const;
@@ -139,6 +141,7 @@ public:
 	QSharedPointer<DkImageContainerT> getCurrentImage() const;
 	QString getCurrentFilePath() const;
 	QSharedPointer<DkImageLoader> getCurrentImageLoader() const;
+	bool requestClose() const;
 
 signals:
 	void imageUpdatedSignal(QSharedPointer<DkImageContainerT>) const;
@@ -163,6 +166,7 @@ public slots:
 	void showPreferences(bool show = true);
 	void showTabs(bool show = true);
 	void pasteImage();
+	void loadFileToTab(const QString& filePath);
 	void loadFile(const QString& filePath, bool newTab = false);
 	void loadDir(const QString& filePath);
 	void loadDirToTab(const QString& dirPath);
@@ -173,10 +177,10 @@ public slots:
 	void openPreferences();
 	void restart() const;
 	void showProgress(bool show, int time = -1);
+	void startSlideshow(bool start = true) const;
+	void setInfo(const QString& msg) const;
 
 protected:
-	DkViewPort* mViewport = 0;
-
 	QTabBar* mTabbar = 0;
 	DkProgressBar* mProgressBar = 0;
 	QVector<QSharedPointer<DkTabInfo> > mTabInfos;
@@ -184,20 +188,22 @@ protected:
 	QVector<QWidget*> mWidgets;
 	QStackedLayout* mViewLayout = 0;
 
+	void dropEvent(QDropEvent *event) override;
+	void dragEnterEvent(QDragEnterEvent *event) override;
+	void paintEvent(QPaintEvent* ev) override;
+
 	void createLayout();
 	void updateTabIdx();
 	void switchWidget(int widget);
 	void switchWidget(QWidget* widget = 0);
-	void dropEvent(QDropEvent *event);
-	void dragEnterEvent(QDragEnterEvent *event);
 	bool loadFromMime(const QMimeData* mimeData);
 	bool loadCascadeTrainingFiles(QList<QUrl> urls);
 	void updateLoader(QSharedPointer<DkImageLoader> loader) const;
-	void paintEvent(QPaintEvent* ev) override;
 
 	DkPreferenceWidget* createPreferences();
 	DkRecentFilesWidget* createRecentFiles();
 	DkThumbScrollWidget* createThumbScrollWidget();
+	void createViewPort();
 
 	enum {
 		viewport_widget,

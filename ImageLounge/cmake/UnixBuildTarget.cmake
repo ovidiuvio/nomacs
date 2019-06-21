@@ -77,11 +77,19 @@ install(FILES nomacs.desktop DESTINATION share/applications)
 #  icon
 install(FILES src/img/nomacs.svg DESTINATION share/pixmaps)
 #  translations
-install(FILES ${NOMACS_QM} DESTINATION share/nomacs/translations)
+install(FILES ${NOMACS_QM} DESTINATION "share/nomacs/Image Lounge/translations")
 #  manpage
-install(FILES Readme/nomacs.1 DESTINATION share/man/man1)
+if(${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
+    install(FILES Readme/nomacs.1 DESTINATION man/man1)
+else()
+    install(FILES Readme/nomacs.1 DESTINATION share/man/man1)
+endif()
 #  appdata
 install(FILES nomacs.appdata.xml DESTINATION share/metainfo/)
+
+# themes
+file(GLOB NMC_THEMES "src/themes/*.css")
+install(FILES ${NMC_THEMES} DESTINATION "share/nomacs/Image Lounge/themes")
 
 # "make dist" target
 string(TOLOWER ${PROJECT_NAME} CPACK_PACKAGE_NAME)
@@ -93,7 +101,6 @@ set(CPACK_SOURCE_IGNORE_FILES ${CPACK_IGNORE_FILES})
 include(CPack)
 # simulate autotools' "make dist"
 add_custom_target(dist COMMAND ${CMAKE_MAKE_PROGRAM} package_source)
-
 
 # generate configuration file
 set(NOMACS_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})

@@ -65,6 +65,7 @@
 #include "DkPluginManager.h"
 
 #include "DkDependencyResolver.h"
+#include "DkMetaData.h"
 
 #include <iostream>
 #include <cassert>
@@ -94,10 +95,13 @@ int main(int argc, char *argv[]) {
 #if QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
     QApplication::setAttribute(Qt::AA_DisableHighDpiScaling, true);
 #endif
+
 	QApplication app(argc, (char**)argv);
 
 	// init settings
 	nmc::DkSettingsManager::instance().init();
+	nmc::DkMetaDataHelper::initialize();	// this line makes the XmpParser thread-save - so don't delete it even if you seem to know what you do
+
 	nmc::DefaultSettings settings;
 	int mode = settings.value("AppSettings/appMode", nmc::DkSettingsManager::param().app().appMode).toInt();
 
@@ -121,7 +125,10 @@ int main(int argc, char *argv[]) {
 	QCommandLineOption fullScreenOpt(QStringList() << "f" << "fullscreen", QObject::tr("Start in fullscreen."));
 	parser.addOption(fullScreenOpt);
 
-	QCommandLineOption pongOpt(QStringList() << "x" << "pong", QObject::tr("Start Pong."));
+	QCommandLineOption slideshowOpt(QStringList() << "slideshow", QObject::tr("Start slideshow playback"));
+	parser.addOption(slideshowOpt);
+
+	QCommandLineOption pongOpt(QStringList() << "pong", QObject::tr("Start Pong."));
 	parser.addOption(pongOpt);
 
 	QCommandLineOption privateOpt(QStringList() << "p" << "private", QObject::tr("Start in private mode."));
@@ -263,32 +270,39 @@ int main(int argc, char *argv[]) {
 
 	qInfo() << "Initialization takes: " << dt;
 
+	nmc::DkCentralWidget* cw = w->getTabWidget();
+
+	bool loading = false;
+
 	if (!parser.positionalArguments().empty()) {
+
 		QString filePath = parser.positionalArguments()[0].trimmed();
 
-		if (!filePath.isEmpty())
+		if (!filePath.isEmpty()) {
 			w->loadFile(QFileInfo(filePath).absoluteFilePath());	// update folder + be silent
+			loading = true;
+		}
 	}
-	//else {
-	//	bool showRecent = nmc::DkSettingsManager::param().app().showRecentFiles;
-	//	showRecent &= nmc::DkSettingsManager::param().app().currentAppMode != nmc::DkSettings::mode_frameless;
-	//	w->showRecentFiles(showRecent);
-	//}
 
 	// load directory preview
 	if (!parser.value(sourceDirOpt).trimmed().isEmpty()) {
-		nmc::DkCentralWidget* cw = w->getTabWidget();
 		cw->loadDirToTab(parser.value(sourceDirOpt));
+		loading = true;
 	}
 
 	// load to tabs
 	if (!parser.value(tabOpt).isEmpty()) {
-		nmc::DkCentralWidget* cw = w->getTabWidget();
-		
 		QStringList tabPaths = parser.values(tabOpt);
-		
+		loading = true;
+
 		for (const QString& filePath : tabPaths)
 			cw->addTab(filePath);
+	}
+	
+	// load recent files if there is nothing to display
+	if (!loading &&
+		nmc::DkSettingsManager::param().app().showRecentFiles) {
+		cw->showRecentFiles();
 	}
 
 	int fullScreenMode = settings.value("AppSettings/currentAppMode", nmc::DkSettingsManager::param().app().currentAppMode).toInt();
@@ -299,6 +313,10 @@ int main(int argc, char *argv[]) {
 		parser.isSet(fullScreenOpt)) {
 		w->enterFullScreen();
 		qDebug() << "trying to enter fullscreen...";
+	}
+
+	if (parser.isSet(slideshowOpt)) {
+		cw->startSlideshow();
 	}
 
 #ifdef Q_WS_MAC

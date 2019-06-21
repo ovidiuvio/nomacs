@@ -58,6 +58,13 @@ class DllCoreExport DkWidget : public QWidget {
 
 public:
 	DkWidget(QWidget* parent = 0, Qt::WindowFlags flags = 0);
+};
+
+class DllCoreExport DkFadeWidget : public DkWidget {
+	Q_OBJECT
+
+public:
+	DkFadeWidget(QWidget* parent = 0, Qt::WindowFlags flags = 0);
 
 	void registerAction(QAction* action);
 	void block(bool blocked);
@@ -96,10 +103,10 @@ protected:
 
 	// functions
 	void init();
-	void paintEvent(QPaintEvent *event);
+	void paintEvent(QPaintEvent *event) override;
 };
 
-class DllCoreExport DkNamedWidget : public DkWidget {
+class DllCoreExport DkNamedWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -151,7 +158,7 @@ protected:
 
 	// functions
 	virtual void init();
-	virtual void paintEvent(QPaintEvent *event);
+	virtual void paintEvent(QPaintEvent *event) override;
 	virtual void draw(QPainter* painter);
 
 	// for my children...
@@ -170,9 +177,9 @@ public:
 };
 
 /**
- * This label fakes the DkWidget behavior.
+ * This label fakes the DkFadeWidget behavior.
  * (allows for registering actions + fades in and out)
- * we need this class too, since we cannot derive from DkLabel & DkWidget
+ * we need this class too, since we cannot derive from DkLabel & DkFadeWidget
  * at the same time -> both have QObject as common base class.
  **/
 class DkFadeLabel : public DkLabel {
@@ -227,7 +234,7 @@ public slots:
 	virtual void setVisible(bool visible, bool saveSetting = true);
 
 protected:
-	virtual void closeEvent(QCloseEvent* event);
+	virtual void closeEvent(QCloseEvent* event) override;
 
 	QBitArray* displaySettingsBits;
 	QAction* mAction = 0;

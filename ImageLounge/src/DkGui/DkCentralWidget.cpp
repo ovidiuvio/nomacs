@@ -41,6 +41,7 @@
 #include "DkWidgets.h"
 #include "DkActionManager.h"
 #include "DkPreferenceWidgets.h"
+#include "DkDialog.h"
 
 #pragma warning(push, 0)	// no warnings from includes - begin
 #include <QFileDialog>
@@ -67,7 +68,8 @@ DkTabInfo::DkTabInfo(const QSharedPointer<DkImageContainerT> imgC, int idx, QObj
 		deactivate();
 	mImageLoader->setCurrentImage(imgC);
 
-	mTabMode = (!imgC) ? tab_recent_files : tab_single_image;
+	if (imgC)
+		mTabMode = tab_single_image;
 	mTabIdx = idx;
 	mFilePath = getFilePath();
 }
@@ -193,9 +195,9 @@ QIcon DkTabInfo::getIcon() {
 	QIcon icon;
 
 	if (mTabMode == tab_thumb_preview)
-		return DkImage::loadIcon(":/nomacs/img/thumbs-view.svg");
+		return DkImage::loadIcon(":/nomacs/img/rects.svg");
 	else if (mTabMode == tab_recent_files)
-		return DkImage::loadIcon(":/nomacs/img/thumbs-view.svg");
+		return DkImage::loadIcon(":/nomacs/img/bars.svg");
 	else if (mTabMode == tab_preferences)
 		return DkImage::loadIcon(":/nomacs/img/settings.svg");
 	else if (mTabMode == tab_batch)
@@ -259,12 +261,10 @@ void DkTabInfo::setMode(int mode) {
 }
 
 // DkCenteralWidget --------------------------------------------------------------------
-DkCentralWidget::DkCentralWidget(DkViewPort* viewport, QWidget* parent) : QWidget(parent) {
+DkCentralWidget::DkCentralWidget(QWidget* parent) : DkWidget(parent) {
 
-	mViewport = viewport;
 	setObjectName("DkCentralWidget");
 	createLayout();
-
 	setAcceptDrops(true);
 
 	DkActionManager& am = DkActionManager::instance();
@@ -286,6 +286,10 @@ DkCentralWidget::DkCentralWidget(DkViewPort* viewport, QWidget* parent) : QWidge
 	connect(am.action(DkActionManager::menu_view_last_tab), &QAction::triggered, this, [this]() { setActiveTab(getTabs().count()-1); });
 	connect(am.action(DkActionManager::menu_tools_batch), SIGNAL(triggered()), this, SLOT(openBatch()));
 	connect(am.action(DkActionManager::menu_panel_thumbview), SIGNAL(triggered(bool)), this, SLOT(showThumbView(bool)));
+
+	// runs in the background & will be deleted with this widget...
+	DkDialogManager* dm = new DkDialogManager(this);
+	dm->setCentralWidget(this);
 }
 
 DkCentralWidget::~DkCentralWidget() {
@@ -304,24 +308,18 @@ void DkCentralWidget::createLayout() {
 	mTabbar->setMovable(true);
 	mTabbar->installEventFilter(new TabMiddleMouseCloser([this](int idx) { removeTab(idx); }));
 	mTabbar->hide();
-	//addTab(QFileInfo());
 
 	mProgressBar = new DkProgressBar(this);
-	//mProgressBar->setStyleSheet(mProgressBar->styleSheet() + "QProgressBar{background-color: #fff;}");
 	mProgressBar->hide();
 
 	mWidgets.resize(widget_end);
-	mWidgets[viewport_widget] = mViewport;
+	mWidgets[viewport_widget] = 0;
 	mWidgets[recent_files_widget] = 0;
 	mWidgets[thumbs_widget] = 0;
 	mWidgets[preference_widget] = 0;
 
 	QWidget* viewWidget = new QWidget(this);
 	mViewLayout = new QStackedLayout(viewWidget);
-
-	for (QWidget* w : mWidgets)
-		if (w)
-			mViewLayout->addWidget(w);
 
 	QVBoxLayout* vbLayout = new QVBoxLayout(this);
 	vbLayout->setContentsMargins(0,0,0,0);
@@ -331,9 +329,6 @@ void DkCentralWidget::createLayout() {
 	vbLayout->addWidget(viewWidget);
 
 	// connections
-	connect(mViewport, SIGNAL(addTabSignal(const QString&)), this, SLOT(addTab(const QString&)));
-	connect(mViewport, SIGNAL(showProgress(bool, int)), this, SLOT(showProgress(bool, int)));
-
 	connect(mTabbar, SIGNAL(currentChanged(int)), this, SLOT(currentTabChanged(int)));
 	connect(mTabbar, SIGNAL(tabCloseRequested(int)), this, SLOT(tabCloseRequested(int)));
 	connect(mTabbar, SIGNAL(tabMoved(int, int)), this, SLOT(tabMoved(int, int)));
@@ -399,9 +394,16 @@ void DkCentralWidget::loadSettings() {
 
 }
 
+bool DkCentralWidget::hasViewPort() const {
+	return mWidgets[viewport_widget] != 0;
+}
+
 DkViewPort* DkCentralWidget::getViewPort() const {
 
-	return mViewport;
+	if (!mWidgets[viewport_widget])
+		qWarning() << "danger zone: viewport is queried before its initialization";
+
+	return dynamic_cast<DkViewPort*>(mWidgets[viewport_widget]);
 }
 
 DkThumbScrollWidget* DkCentralWidget::getThumbScrollWidget() const {
@@ -422,11 +424,6 @@ void DkCentralWidget::currentTabChanged(int idx) {
 	mTabInfos.at(idx)->activate();
 	QSharedPointer<DkImageContainerT> imgC = mTabInfos.at(idx)->getImage();
 
-	//// TODO: this is a fast fix because we release today
-	//// better solution: check why this state might happen
-	//if (!imgC && mTabInfos.at(idx)->getMode() == DkTabInfo::tab_single_image)
-	//	mTabInfos.at(idx)->setMode(DkTabInfo::tab_recent_files);
-
 	if (imgC && mTabInfos.at(idx)->getMode() == DkTabInfo::tab_single_image) {
 		mTabInfos.at(idx)->getImageLoader()->load(imgC);
 		showViewPort();
@@ -438,21 +435,12 @@ void DkCentralWidget::currentTabChanged(int idx) {
 		showRecentFiles();
 	}
 	else if (mTabInfos.at(idx)->getMode() == DkTabInfo::tab_preferences) {
-		showRecentFiles(false);
 		showPreferences();
 	}
 	else if (mTabInfos.at(idx)->getMode() == DkTabInfo::tab_batch) {
-		showRecentFiles(false);
 		showBatch();
 	}
-	else {
-		showViewPort();
-		mViewport->unloadImage();
-		mViewport->deactivate();
 
-		if (DkSettingsManager::param().app().showRecentFiles)
-			showRecentFiles(true);
-	}
 }
 
 void DkCentralWidget::updateLoader(QSharedPointer<DkImageLoader> loader) const {
@@ -469,18 +457,20 @@ void DkCentralWidget::updateLoader(QSharedPointer<DkImageLoader> loader) const {
 		disconnect(loader.data(), SIGNAL(imageLoadedSignal(QSharedPointer<DkImageContainerT>)), this, SIGNAL(imageLoadedSignal(QSharedPointer<DkImageContainerT>)));
 		disconnect(loader.data(), SIGNAL(imageHasGPSSignal(bool)), this, SIGNAL(imageHasGPSSignal(bool)));
 		disconnect(loader.data(), SIGNAL(updateSpinnerSignalDelayed(bool, int)), this, SLOT(showProgress(bool, int)));
+		disconnect(loader.data(), SIGNAL(loadImageToTab(const QString&)), this, SLOT(loadFileToTab(const QString&)));
 	}
 
 	if (!loader)
 		return;
 
-	mViewport->setImageLoader(loader);
+	if (hasViewPort())
+		getViewPort()->setImageLoader(loader);
 	connect(loader.data(), SIGNAL(imageUpdatedSignal(QSharedPointer<DkImageContainerT>)), this, SLOT(imageLoaded(QSharedPointer<DkImageContainerT>)), Qt::UniqueConnection);
 	connect(loader.data(), SIGNAL(imageUpdatedSignal(QSharedPointer<DkImageContainerT>)), this, SIGNAL(imageUpdatedSignal(QSharedPointer<DkImageContainerT>)), Qt::UniqueConnection);
 	connect(loader.data(), SIGNAL(imageLoadedSignal(QSharedPointer<DkImageContainerT>)), this, SIGNAL(imageLoadedSignal(QSharedPointer<DkImageContainerT>)), Qt::UniqueConnection);
 	connect(loader.data(), SIGNAL(imageHasGPSSignal(bool)), this, SIGNAL(imageHasGPSSignal(bool)), Qt::UniqueConnection);
 	connect(loader.data(), SIGNAL(updateSpinnerSignalDelayed(bool, int)), this, SLOT(showProgress(bool, int)), Qt::UniqueConnection);
-
+	connect(loader.data(), SIGNAL(loadImageToTab(const QString&)), this, SLOT(loadFileToTab(const QString&)), Qt::UniqueConnection);
 }
 
 void DkCentralWidget::paintEvent(QPaintEvent *) {
@@ -513,7 +503,7 @@ DkPreferenceWidget* DkCentralWidget::createPreferences() {
 	pw->addTabWidget(tab);
 
 	// display preferences
-	tab = new DkPreferenceTabWidget(DkImage::loadIcon(":/nomacs/img/display-settings.svg", s), tr("Display"), this);
+	tab = new DkPreferenceTabWidget(DkImage::loadIcon(":/nomacs/img/display.svg", s), tr("Display"), this);
 	DkDisplayPreference* dp = new DkDisplayPreference(this);
 	tab->setWidget(dp);
 	pw->addTabWidget(tab);
@@ -525,7 +515,7 @@ DkPreferenceWidget* DkCentralWidget::createPreferences() {
 	pw->addTabWidget(tab);
 
 	// file association preferences
-	tab = new DkPreferenceTabWidget(DkImage::loadIcon(":/nomacs/img/nomacs.svg", s), tr("File Associations"), this);
+	tab = new DkPreferenceTabWidget(DkImage::loadIcon(":/nomacs/img/nomacs-bg.svg", s), tr("File Associations"), this);
 	DkFileAssociationsPreference* fap = new DkFileAssociationsPreference(this);
 	tab->setWidget(fap);
 	pw->addTabWidget(tab);
@@ -537,7 +527,7 @@ DkPreferenceWidget* DkCentralWidget::createPreferences() {
 	pw->addTabWidget(tab);
 
 	// file association preferences
-	tab = new DkPreferenceTabWidget(DkImage::loadIcon(":/nomacs/img/manipulation.svg", s), tr("Editor"), this);
+	tab = new DkPreferenceTabWidget(DkImage::loadIcon(":/nomacs/img/sliders.svg", s), tr("Editor"), this);
 	DkEditorPreference* ep = new DkEditorPreference(this);
 	tab->setWidget(ep);
 	pw->addTabWidget(tab);
@@ -584,7 +574,7 @@ DkThumbScrollWidget* DkCentralWidget::createThumbScrollWidget() {
 	thumbScrollWidget->addActions(am.sortActions().toList());
 	thumbScrollWidget->addActions(am.toolsActions().toList());
 	thumbScrollWidget->addActions(am.panelActions().toList());
-	thumbScrollWidget->addActions(am.syncActions().toList());
+	//thumbScrollWidget->addActions(am.syncActions().toList());
 	thumbScrollWidget->addActions(am.pluginActions().toList());
 	thumbScrollWidget->addActions(am.helpActions().toList());
 	thumbScrollWidget->addActions(am.hiddenActions().toList());
@@ -594,6 +584,31 @@ DkThumbScrollWidget* DkCentralWidget::createThumbScrollWidget() {
 	connect(thumbScrollWidget, SIGNAL(batchProcessFilesSignal(const QStringList&)), this, SLOT(openBatch(const QStringList&)));
 
 	return thumbScrollWidget;
+}
+
+void DkCentralWidget::createViewPort() {
+
+	if (hasViewPort()) {
+		qDebug() << "viewport already created...";
+		return;
+	}
+
+	DkViewPort* vp = 0;
+
+	if (parent() && parent()->objectName() == "DkNoMacsFrameless")
+		vp = new DkViewPortFrameless(this);
+	if (parent() && parent()->objectName() == "DkNoMacsContrast")
+		vp = new DkViewPortContrast(this);
+	else
+		vp = new DkViewPort(this);
+	
+	if (mTabbar->currentIndex() != -1)
+		vp->setImageLoader(mTabInfos[mTabbar->currentIndex()]->getImageLoader());
+	connect(vp, SIGNAL(addTabSignal(const QString&)), this, SLOT(addTab(const QString&)));
+	connect(vp, SIGNAL(showProgress(bool, int)), this, SLOT(showProgress(bool, int)));
+
+	mWidgets[viewport_widget] = vp;
+	mViewLayout->insertWidget(viewport_widget, mWidgets[viewport_widget]);
 }
 
 void DkCentralWidget::tabCloseRequested(int idx) {
@@ -744,6 +759,7 @@ void DkCentralWidget::previousTab() const {
 }
 
 void DkCentralWidget::setActiveTab(int idx) const {
+	
 	if (mTabInfos.size() < 2)
 		return;
 
@@ -828,12 +844,15 @@ void DkCentralWidget::showThumbView(bool show) {
 void DkCentralWidget::showViewPort(bool show /* = true */) {
 
 	if (show) {
+		if (!hasViewPort())
+			createViewPort();
+		
 		switchWidget(mWidgets[viewport_widget]);
 		if (getCurrentImage())
-			mViewport->setImage(getCurrentImage()->image());
+			getViewPort()->setImage(getCurrentImage()->image());
 	}
-	else 
-		mViewport->deactivate();
+	else if (hasViewPort())
+		getViewPort()->deactivate();
 	
 }
 
@@ -849,7 +868,10 @@ void DkCentralWidget::showRecentFiles(bool show) {
 
 		switchWidget(mWidgets[recent_files_widget]);
 	}
-
+	else {
+		// toggle back to image
+		showViewPort();
+	}
 }
 
 void DkCentralWidget::showPreferences(bool show) {
@@ -978,6 +1000,19 @@ void DkCentralWidget::showProgress(bool show, int time) {
 	mProgressBar->setVisibleTimed(show, time);
 }
 
+void DkCentralWidget::startSlideshow(bool start) const {
+
+	getViewPort()->getController()->startSlideshow(start);
+}
+
+void DkCentralWidget::setInfo(const QString & msg) const {
+
+	if (hasViewPort())
+		getViewPort()->getController()->setInfo(msg);
+	
+	qInfo() << msg;
+}
+
 QSharedPointer<DkImageContainerT> DkCentralWidget::getCurrentImage() const {
 
 	if (mTabInfos.empty())
@@ -1000,6 +1035,14 @@ QSharedPointer<DkImageLoader> DkCentralWidget::getCurrentImageLoader() const {
 		return QSharedPointer<DkImageLoader>();
 
 	return mTabInfos[mTabbar->currentIndex()]->getImageLoader();
+}
+
+bool DkCentralWidget::requestClose() const {
+	
+	if (hasViewPort())
+		return getViewPort()->unloadImage(true);
+	
+	return true;
 }
 
 QString DkCentralWidget::getCurrentDir() const {
@@ -1029,15 +1072,26 @@ void DkCentralWidget::loadDir(const QString& filePath) {
 
 	if (mTabInfos[mTabbar->currentIndex()]->getMode() == DkTabInfo::tab_thumb_preview && getThumbScrollWidget())
 		getThumbScrollWidget()->setDir(filePath);
-	else
-		mViewport->loadFile(filePath);
+	else {
+		if (!hasViewPort())
+			createViewPort();
+		getViewPort()->loadFile(filePath);
+	}
 }
 
+void DkCentralWidget::loadFileToTab(const QString& filePath) {
+
+	loadFile(filePath, true);
+}
 
 void DkCentralWidget::loadFile(const QString& filePath, bool newTab) {
 
 	if (!newTab) {
-		mViewport->loadFile(filePath);
+
+		if (!hasViewPort())
+			createViewPort();
+
+		getViewPort()->loadFile(filePath);
 		return;
 	}
 
@@ -1075,7 +1129,8 @@ void DkCentralWidget::loadDirToTab(const QString& dirPath) {
             return;
         }
     }
-    mViewport->getController()->setInfo(tr("I could not load \"%1\"").arg(dirPath));
+
+	setInfo(tr("I could not load \"%1\"").arg(dirPath));
 }
 
 /** loadUrls() loads a list of valid urls.
@@ -1118,7 +1173,7 @@ void DkCentralWidget::loadUrl(const QUrl& url, bool newTab) {
 	}
 
 	auto display = [&](QString msg) {
-		mViewport->getController()->setInfo(msg.arg(msg));
+		setInfo(msg);
 	};
 
 	if (fi.exists()) {
@@ -1186,19 +1241,19 @@ void DkCentralWidget::pasteImage() {
 	QClipboard* clipboard = QApplication::clipboard();
 
 	if (!loadFromMime(clipboard->mimeData()))
-		mViewport->getController()->setInfo("Clipboard has no image...");
+		setInfo("Clipboard has no image...");
 
 }
 
 void DkCentralWidget::dropEvent(QDropEvent *event) {
 
-	if (event->source() == this || event->source() == mViewport) {
+	if (event->source() == this || (hasViewPort() && event->source() == getViewPort())) {
 		event->accept();
 		return;
 	}
 
 	if (!loadFromMime(event->mimeData()))
-		mViewport->getController()->setInfo(tr("Sorry, I could not drop the content."));
+		setInfo(tr("Sorry, I could not drop the content."));
 }
 
 
@@ -1208,14 +1263,48 @@ bool DkCentralWidget::loadFromMime(const QMimeData* mimeData) {
         return false;
 
     QStringList mimeFmts = mimeData->formats();
-    //qDebug().noquote() << "mime formats:" << mimeFmts.join("\n");
+
+	// try to load an image
+	QImage dropImg;
+
+	// first see if we have MS mime data
+	// since i.e. outlook also add thumbnails, we try to first load the high quality stuff
+	for (const QString& fmt : mimeFmts) {
 	
-    if (mimeData->hasImage()) {
+		//qDebugClean() << "mime format:" << fmt << " " << mimeData->data(fmt).size()/1024.0 << "KB";
+
+		if (fmt.contains("Office Drawing Shape Format")) {
+
+			// try to get rid of all decorations
+			QSharedPointer<QByteArray> ba(new QByteArray(DkImage::extractImageFromDataStream(mimeData->data(fmt))));
+
+			if (!ba->isEmpty()) {
+				DkBasicLoader bl;
+				bl.loadGeneral("", ba);
+
+				dropImg = bl.image();
+
+				if (!dropImg.isNull())
+					qDebug() << "image loaded from MS data";
+				break;
+			}
+		}
+	}
+
+    if (dropImg.isNull() && mimeData->hasImage()) {
         // we got an image buffer
-        QImage dropImg = qvariant_cast<QImage>(mimeData->imageData());
-        mViewport->loadImage(dropImg);
-        return true;
+        dropImg = qvariant_cast<QImage>(mimeData->imageData());
+		qInfo() << "Qt image loaded from mime";
     }
+
+	if (!dropImg.isNull()) {
+		
+		if (!hasViewPort())
+			createViewPort();
+		
+		getViewPort()->loadImage(dropImg);
+		return true;
+	}
 
     // parse mime data. get a non-empty list of urls. url is the first.
     QList<QUrl> urls;
@@ -1228,7 +1317,7 @@ bool DkCentralWidget::loadFromMime(const QMimeData* mimeData) {
 				urls.append(u);
 		}
 	}
-    else if(mimeData->formats().contains("text/plain")) {
+    else if (mimeData->formats().contains("text/plain")) {
         //we got text data. maybe it is a list of urls
         urls = DkUtils::findUrlsInTextNewline(mimeData->text());
     }
@@ -1290,7 +1379,7 @@ bool DkCentralWidget::loadCascadeTrainingFiles(QList<QUrl> urls) {
 
         if (numFiles) {
             loadFile(sPath);
-            mViewport->getController()->setInfo(tr("%1 vec files merged").arg(numFiles));
+			setInfo(tr("%1 vec files merged").arg(numFiles));
             return true;
         }
     }

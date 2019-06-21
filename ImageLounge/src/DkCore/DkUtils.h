@@ -41,6 +41,8 @@
 #pragma warning(disable: 4251)	// dll interface missing
 #pragma warning(disable: 4714)	// Qt's force inline
 
+#include <assert.h>		// convenience for minimal builds
+
 #ifdef QT_NO_DEBUG_OUTPUT
 #pragma warning(disable: 4127)		// no 'conditional expression is constant' if qDebug() messages are removed
 #endif
@@ -86,6 +88,8 @@ DllCoreExport QDebug qWarningClean();
 #if QT_VERSION < 0x050500
 #define qInfo() qDebug() 
 #endif
+
+#define __FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
 
 // fixes Qt's damn no latin1 on tr() policy
 #define dk_degree_str QChar(0x00B0)
@@ -156,6 +160,8 @@ public:
 
 	static void initializeDebug();
 
+	static void logToFile(QtMsgType type, const QString &msg);
+
 	static QString getLogFilePath();
 
 	static QString getAppDataPath();
@@ -163,8 +169,6 @@ public:
 	static QString getTranslationPath();
 
 	static QWidget* getMainWindow();
-
-	static void showViewportMessage(const QString& msg);
 
 	/**
 	 * Sleeps n ms.
@@ -531,7 +535,7 @@ public:
 
 protected:
 	std::function<void(int)> callback;
-	bool eventFilter(QObject *obj, QEvent *event);
+	bool eventFilter(QObject *obj, QEvent *event) override;
 };
 
 }

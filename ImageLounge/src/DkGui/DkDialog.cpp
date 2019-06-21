@@ -37,6 +37,8 @@
 #include "DkUtils.h"
 #include "DkActionManager.h"
 #include "DkPluginManager.h"
+#include "DkCentralWidget.h"
+#include "DkViewPort.h"
 
 #if defined(Q_OS_WIN) && !defined(SOCK_STREAM)
 #include <winsock2.h>	// needed since libraw 0.16
@@ -91,10 +93,11 @@
 #include <QKeySequenceEdit>
 #include <QPrinterInfo>
 #include <QDesktopWidget>
+#include <QScreen>
 
 // quazip
 #ifdef WITH_QUAZIP
-#include <quazip/JlCompress.h>
+#include <quazip5/JlCompress.h>
 #endif
 
 #pragma warning(pop)		// no warnings from includes - end
@@ -939,15 +942,14 @@ void DkResizeDialog::createLayout() {
 	mWPixelSpin->setRange(minPx, maxPx);
 	mWPixelSpin->setDecimals(0);
 
-	mLockButton = new DkButton(QIcon(":/nomacs/img/lock.svg"), QIcon(":/nomacs/img/lock-unlocked.svg"), "lock", this);
-	mLockButton->setFixedSize(QSize(16,16));
+	mLockButton = new DkButton(DkImage::loadIcon(":/nomacs/img/lock.svg"), DkImage::loadIcon(":/nomacs/img/lock-unlocked.svg"), "lock", this);
 	mLockButton->setObjectName("lockButton");
 	mLockButton->setCheckable(true);
 	mLockButton->setChecked(true);
 
 	QLabel* hPixelLabel = new QLabel(tr("Height: "), this);
 	hPixelLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-	mHPixelSpin = new DkSelectAllDoubleSpinBox();
+	mHPixelSpin = new DkSelectAllDoubleSpinBox(this);
 	mHPixelSpin->setObjectName("hPixelSpin");
 	mHPixelSpin->setRange(minPx, maxPx);
 	mHPixelSpin->setDecimals(0);
@@ -977,9 +979,8 @@ void DkResizeDialog::createLayout() {
 	mWidthSpin->setDecimals(decimals);
 
 
-	mLockButtonDim = new DkButton(QIcon(":/nomacs/img/lock.svg"), QIcon(":/nomacs/img/lock-unlocked.svg"), "lock");
-	//lockButtonDim->setIcon(QIcon(":/nomacs/img/lock.svg"));
-	mLockButtonDim->setFixedSize(QSize(16,16));
+	mLockButtonDim = new DkButton(DkImage::loadIcon(":/nomacs/img/lock.svg"), DkImage::loadIcon(":/nomacs/img/lock-unlocked.svg"), "lock");
+	//mLockButtonDim->setFixedSize(QSize(16,16));
 	mLockButtonDim->setObjectName("lockButtonDim");
 	mLockButtonDim->setCheckable(true);
 	mLockButtonDim->setChecked(true);
@@ -1080,6 +1081,8 @@ void DkResizeDialog::createLayout() {
 	layout->addWidget(buttons, 3, 0, 1, 2, Qt::AlignRight);
 	
 	adjustSize();
+	resize(700, 500);
+
 	//show();
 }
 
@@ -1373,30 +1376,9 @@ void DkResizeDialog::updateSnippets() {
 	if (mImg.isNull() /*|| !isVisible()*/)
 		return;
 
-	//// fix layout issues - sorry
-	//origView->setFixedWidth(width()*0.5f-30);
-	//previewLabel->setFixedWidth(origView->width()-2);
-	//origView->setFixedHeight(width()*0.5f-30);
-	//previewLabel->setFixedHeight(width()*0.5f-30);
-
-
 	mOrigView->setImage(mImg);
 	mOrigView->fullView();
 	mOrigView->zoomConstraints(mOrigView->get100Factor());
-
-	qDebug() << "zoom constraint: " << mOrigView->get100Factor();
-
-	//QSize s = QSize(width()-2*leftSpacing-10, width()-2*leftSpacing-10);
-	//s *= 0.5;
-	//origImg = QImage(s, QImage::Format_ARGB32);
-	//origImg.fill(Qt::transparent);
-	//QRect imgRect = QRect(QPoint(img.width()*0.5-origImg.width()*0.5, img.height()*0.5-origImg.height()*0.5), origImg.size());
-
-	//QPainter painter(&origImg);
-	//painter.setBackgroundMode(Qt::TransparentMode);
-	//painter.drawImage(QRect(QPoint(), origImg.size()), img, imgRect;)
-	//painter.end();
-
 }
 
 void DkResizeDialog::drawPreview() {
@@ -1428,8 +1410,6 @@ QImage DkResizeDialog::resizeImg(QImage img, bool silent) {
 
 	QSize imgSize = mImg.size();
 
-	qDebug() << "new size: " << newSize;
-
 	// nothing to do
 	if (mImg.size() == newSize)
 		return img;
@@ -1438,8 +1418,6 @@ QImage DkResizeDialog::resizeImg(QImage img, bool silent) {
 		// compute relative size
 		float relWidth = (float)newSize.width()/(float)imgSize.width();
 		float relHeight = (float)newSize.height()/(float)imgSize.height();
-
-		qDebug() << "relative size: " << newSize;
 
 		newSize = QSize(qRound(img.width()*relWidth), qRound(img.height()*relHeight));
 	}
@@ -2042,10 +2020,9 @@ void DkUpdateDialog::okButtonClicked() {
 
 // DkPrintPreviewDialog --------------------------------------------------------------------
 DkPrintPreviewDialog::DkPrintPreviewDialog(QWidget* parent, Qt::WindowFlags flags) 
-		: QMainWindow(parent, flags) {
+		: QDialog(parent, flags) {
 	
 	setWindowTitle(tr("Print Preview"));
-
 	init();
 }
 
@@ -2074,11 +2051,9 @@ void DkPrintPreviewDialog::init() {
 			mPrinter = new QPrinter(QPrinterInfo::defaultPrinter(), QPrinter::HighResolution);
 			
 #else
-		mPrinter = new QPrinter;
+		mPrinter = new QPrinter(QPrinter::HighResolution);
 #endif
 	}
-	qDebug() << "printer is valid: " << mPrinter->isValid();
-	
 	mPreview = new DkPrintPreviewWidget(mPrinter, this);
 
 	createIcons();
@@ -2087,7 +2062,6 @@ void DkPrintPreviewDialog::init() {
 	setMinimumHeight(600);
 	setMinimumWidth(800);
 
-	connect(mPreview, SIGNAL(zoomChanged()), this, SLOT(updateZoomFactor()));
 	connect(mPreview, SIGNAL(dpiChanged(int)), mDpiBox, SLOT(setValue(int)));
 }
 
@@ -2096,27 +2070,20 @@ void DkPrintPreviewDialog::createIcons() {
 	mIcons.resize(print_end);
 
 	mIcons[print_fit_width]	= DkImage::loadIcon(":/nomacs/img/fit-width.svg");
-	mIcons[print_fit_page]	= DkImage::loadIcon(":/nomacs/img/zoomReset.svg");
+	mIcons[print_fit_page]	= DkImage::loadIcon(":/nomacs/img/zoom-reset.svg");
 	mIcons[print_zoom_in]	= DkImage::loadIcon(":/nomacs/img/zoom-in.svg");
 	mIcons[print_zoom_out]	= DkImage::loadIcon(":/nomacs/img/zoom-out.svg");
-	mIcons[print_reset_dpi]	= DkImage::loadIcon(":/nomacs/img/zoom100.svg");
+	mIcons[print_reset_dpi]	= DkImage::loadIcon(":/nomacs/img/zoom-100.svg");
 	mIcons[print_landscape]	= DkImage::loadIcon(":/nomacs/img/landscape.svg");
 	mIcons[print_portrait]	= DkImage::loadIcon(":/nomacs/img/portrait.svg");
 	mIcons[print_setup]		= DkImage::loadIcon(":/nomacs/img/print-setup.svg");
-	mIcons[print_printer]	= DkImage::loadIcon(":/nomacs/img/printer.svg");
+	mIcons[print_printer]	= DkImage::loadIcon(":/nomacs/img/print.svg");
 }
 
 void DkPrintPreviewDialog::createLayout() {
 	
 	QAction* fitWidth = new QAction(mIcons[print_fit_width], tr("Fit Width"), this);
 	QAction* fitPage = new QAction(mIcons[print_fit_page], tr("Fit Page"), this);
-
-	// Zoom
-	mZoomFactor = new QSpinBox(this);
-	mZoomFactor->setMinimum(1);
-	mZoomFactor->setMaximum(5000);
-	mZoomFactor->setSingleStep(10);
-	mZoomFactor->setSuffix("%");
 
 	QAction* zoomIn = new QAction(mIcons[print_zoom_in], tr("Zoom in"), this);
 	zoomIn->setShortcut(Qt::Key_Plus);
@@ -2125,7 +2092,6 @@ void DkPrintPreviewDialog::createLayout() {
 	zoomOut->setShortcut(Qt::Key_Minus);
 	
 	QString zoomTip = tr("keep ALT key pressed to zoom with the mouse wheel");
-	mZoomFactor->setToolTip(zoomTip);
 	zoomIn->setToolTip(zoomTip);
 	zoomOut->setToolTip(zoomTip);
 
@@ -2152,7 +2118,6 @@ void DkPrintPreviewDialog::createLayout() {
 	toolbar->addAction(fitWidth);
 	toolbar->addAction(fitPage);
 	
-	toolbar->addWidget(mZoomFactor);
 	toolbar->addAction(zoomIn);
 	toolbar->addAction(zoomOut);
 	
@@ -2167,9 +2132,6 @@ void DkPrintPreviewDialog::createLayout() {
 
 	toolbar->setIconSize(QSize(DkSettingsManager::param().effectiveIconSize(this), DkSettingsManager::param().effectiveIconSize(this)));
 
-	addToolBar(toolbar);
-	setCentralWidget(mPreview);
-
 	// Cannot use the actions' triggered signal here, since it doesn't autorepeat
 	QToolButton *zoomInButton = static_cast<QToolButton *>(toolbar->widgetForAction(zoomIn));
 	zoomInButton->setAutoRepeat(true);
@@ -2181,7 +2143,6 @@ void DkPrintPreviewDialog::createLayout() {
 	zoomOutButton->setAutoRepeatInterval(200);
 	zoomOutButton->setAutoRepeatDelay(200);
 
-	connect(mZoomFactor, SIGNAL(valueChanged(int)), this, SLOT(zoom(int)));
 	connect(mDpiBox, SIGNAL(valueChanged(int)), mPreview, SLOT(changeDpi(int)));
 	connect(zoomInButton, SIGNAL(clicked()), this, SLOT(zoomIn()));
 	connect(zoomOutButton, SIGNAL(clicked()), this, SLOT(zoomOut()));
@@ -2193,22 +2154,29 @@ void DkPrintPreviewDialog::createLayout() {
 
 	connect(printAction, SIGNAL(triggered(bool)), this, SLOT(print()));
 	connect(pageSetup, SIGNAL(triggered(bool)), this, SLOT(pageSetup()));
+
+
+	QMainWindow* mw = new QMainWindow();
+	mw->addToolBar(toolbar);
+	mw->setCentralWidget(mPreview);
+
+	QHBoxLayout* layout = new QHBoxLayout(this);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->addWidget(mw);
+
+	setLayout(layout);
 }
 
 void DkPrintPreviewDialog::zoomIn() {
 	mPreview->zoomIn();
-	updateZoomFactor();
 }
 
 void DkPrintPreviewDialog::zoomOut() {
 	mPreview->zoomOut();
-	updateZoomFactor();
 }
 
 void DkPrintPreviewDialog::zoom(int scale) {
-	
 	mPreview->setZoomFactor(scale/100.0);
-	updateZoomFactor();
 }
 
 void DkPrintPreviewDialog::previewFitWidth() {
@@ -2219,11 +2187,6 @@ void DkPrintPreviewDialog::previewFitWidth() {
 void DkPrintPreviewDialog::previewFitPage() {
 
 	mPreview->fitInView();
-}
-
-void DkPrintPreviewDialog::updateZoomFactor() {
-	
-	mZoomFactor->setValue(qRound(mPreview->zoomFactor() * 100));
 }
 
 void DkPrintPreviewDialog::updateDpiFactor(qreal dpi) {
@@ -2816,12 +2779,12 @@ void DkMosaicDialog::createLayout() {
 	mFileLabel = new QLabel(tr("No Image loaded"), this);
 
 	// save handles
-	QLabel* saveLabel = new QLabel(tr("Image Database:"), this);
+	QLabel* saveLabel = new QLabel(tr("Mosaic Elements Folder:"), this);
 	saveLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
 	QPushButton* dbButton = new QPushButton(tr("&Browse"), this);
 	dbButton->setObjectName("dbButton");
-	dbButton->setToolTip(tr("Specify the root folder of the image database."));
+	dbButton->setToolTip(tr("Specify the root folder of images used for mosaic elements."));
 
 	mFolderLabel = new QLabel(tr("Specify an Image Database"), this);
 
@@ -3248,14 +3211,7 @@ int DkMosaicDialog::computeMosaic(const QString& filter, const QString& suffix, 
 		try {
 
 			DkThumbNail thumb = DkThumbNail(imgPath);
-			thumb.setMinThumbSize(patchResO);
-			//thumb.setRescale(false);
 			thumb.compute();
-
-			if (!thumb.hasImage()) {
-				iDidNothing++;
-				continue;
-			}
 
 			cv::Mat ccTmp(cc.size(), cc.depth());
 		
@@ -3413,7 +3369,8 @@ cv::Mat DkMosaicDialog::createPatch(const DkThumbNail& thumb, int patchRes) {
 	QImage img;
 
 	// load full image if we have not enough resolution
-	if (qMin(thumb.getImage().width(), thumb.getImage().height()) < patchRes) {
+	if (thumb.getImage().isNull() || 
+		qMin(thumb.getImage().width(), thumb.getImage().height()) < patchRes) {
 		DkBasicLoader loader;
 		loader.loadGeneral(thumb.getFilePath(), true, true);
 		img = loader.image();
@@ -4088,9 +4045,12 @@ QStringList DkArchiveExtractionDialog::extractFilesWithProgress(const QString& f
 // DkDialogManager --------------------------------------------------------------------
 DkDialogManager::DkDialogManager(QObject* parent) : QObject(parent) {
 
-	QObject::connect(DkActionManager::instance().action(DkActionManager::menu_edit_shortcuts), SIGNAL(triggered()), this, SLOT(openShortcutsDialog()));
-	QObject::connect(DkActionManager::instance().action(DkActionManager::menu_file_app_manager), SIGNAL(triggered()), this, SLOT(openAppManager()));
+	DkActionManager& am = DkActionManager::instance();
 
+	connect(am.action(DkActionManager::menu_edit_shortcuts), SIGNAL(triggered()), this, SLOT(openShortcutsDialog()));
+	connect(am.action(DkActionManager::menu_file_app_manager), SIGNAL(triggered()), this, SLOT(openAppManager()));
+	connect(am.action(DkActionManager::menu_file_print), SIGNAL(triggered()), this, SLOT(openPrintDialog()));
+	connect(am.action(DkActionManager::menu_tools_mosaic), SIGNAL(triggered()), this, SLOT(openMosaicDialog()));
 }
 
 void DkDialogManager::openShortcutsDialog() const {
@@ -4128,6 +4088,10 @@ void DkDialogManager::openShortcutsDialog() const {
 	shortcutsDialog->deleteLater();
 }
 
+void DkDialogManager::setCentralWidget(DkCentralWidget * cw) {
+	mCentralWidget = cw;
+}
+
 void DkDialogManager::openAppManager() const {
 
 	DkActionManager& am = DkActionManager::instance();
@@ -4139,6 +4103,60 @@ void DkDialogManager::openAppManager() const {
 	appManagerDialog->deleteLater();
 
 	DkActionManager::instance().updateOpenWithMenu();
+}
+
+void DkDialogManager::openMosaicDialog() const {
+
+	if (!mCentralWidget) {
+		qWarning() << "cannot compute mosaic if there is no central widget...";
+		return;
+	}
+
+#ifdef WITH_OPENCV
+	DkMosaicDialog* mosaicDialog = new DkMosaicDialog(DkUtils::getMainWindow(), Qt::WindowMinimizeButtonHint | Qt::WindowMaximizeButtonHint);
+	mosaicDialog->setFile(mCentralWidget->getCurrentFilePath());
+
+	int response = mosaicDialog->exec();
+
+	if (response == QDialog::Accepted && !mosaicDialog->getImage().isNull()) {
+		QImage editedImage = mosaicDialog->getImage();
+		
+		QSharedPointer<DkImageContainerT> imgC(new DkImageContainerT(""));
+		imgC->setImage(mosaicDialog->getImage(), tr("Mosaic"));
+
+		mCentralWidget->addTab(imgC);
+		DkActionManager::instance().action(DkActionManager::menu_file_save_as)->trigger();
+	}
+
+	mosaicDialog->deleteLater();
+#endif
+}
+
+void DkDialogManager::openPrintDialog() const {
+
+	if (!mCentralWidget) {
+		qWarning() << "cannot open print dialog if there is no central widget...";
+		return;
+	}
+
+	QSharedPointer<DkImageContainerT> imgC = mCentralWidget->getCurrentImage();
+
+	DkPrintPreviewDialog* previewDialog = new DkPrintPreviewDialog(DkUtils::getMainWindow());
+	previewDialog->setImage(imgC->image());
+
+	// load all pages of tiffs
+	if (imgC->getLoader()->getNumPages() > 1) {
+
+		auto l = imgC->getLoader();
+
+		for (int idx = 1; idx < l->getNumPages(); idx++) {
+			l->loadPageAt(idx+1);
+			previewDialog->addImage(l->image());
+		}
+	}
+
+	previewDialog->exec();
+	previewDialog->deleteLater();
 }
 
 // -------------------------------------------------------------------- DkPrintImage 
@@ -4314,22 +4332,20 @@ QSize DkSvgSizeDialog::size() const {
 }
 
 // -------------------------------------------------------------------- DkChooseMonitorDialog 
-DkChooseMonitorDialog::DkChooseMonitorDialog(QWidget* parent) {
+DkChooseMonitorDialog::DkChooseMonitorDialog(QWidget* parent) : QDialog(parent) {
 
-	mScreenRects = screenRects();
+	mScreens = screens();
 	createLayout();
+	loadSettings();
+	resize(300, 150);
 }
 
 void DkChooseMonitorDialog::createLayout() {
 
-	mMonitorBox = new QComboBox(this);
+	mDisplayWidget = new DkDisplayWidget(this);
+	mDisplayWidget->show();
 
-	for (int idx = 0; idx < mScreenRects.size(); idx++) {
-
-		QRect r = mScreenRects[idx];
-		QString ms = tr("Monitor %1 (%2 x %3)").arg(idx+1).arg(r.width()).arg(r.height());
-		mMonitorBox->addItem(DkImage::loadIcon(":/nomacs/img/display-settings.svg"), ms);
-	}
+	mCbRemember = new QCheckBox(tr("Remember Monitor Settings"), this);
 
 	// buttons
 	auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, this);
@@ -4339,31 +4355,61 @@ void DkChooseMonitorDialog::createLayout() {
 	connect(buttons, SIGNAL(rejected()), this, SLOT(reject()));
 
 	QGridLayout* layout = new QGridLayout(this);
-	layout->addWidget(mMonitorBox, 1, 1);
-	layout->addWidget(buttons, 2, 1);
+	layout->setRowStretch(0, 1);
+	layout->addWidget(mDisplayWidget, 1, 1);
+	layout->addWidget(mCbRemember, 2, 1);
+	layout->addWidget(buttons, 3, 1);
+	layout->setRowStretch(4, 1);
 }
 
-QVector<QRect> DkChooseMonitorDialog::screenRects() const {
+void DkChooseMonitorDialog::loadSettings() {
 
-	QVector<QRect> screenRects;
-	QDesktopWidget* dt = QApplication::desktop();
+	DefaultSettings settings;
+	settings.beginGroup("MonitorSetup");
+	
+	int mIdx = settings.value("monitorIndex", 0).toInt();
+	mCbRemember->setChecked(!settings.value("showDialog", true).toBool());
 
-	if (!dt)
-		return screenRects;
+	settings.endGroup();
 
-	int sc = dt->screenCount();
+	if (mIdx >= 0 && mIdx < mDisplayWidget->count())
+		mDisplayWidget->setCurrentIndex(mIdx);
+	else
+		mCbRemember->setChecked(false);	// fall-back if the count is illegal
+}
 
-	for (int idx = 0; idx < sc; idx++) {
+void DkChooseMonitorDialog::saveSettings() const {
+	
+	DefaultSettings settings;
 
-		screenRects << dt->availableGeometry(idx);
-	}
+	settings.beginGroup("MonitorSetup");
+	settings.setValue("monitorIndex", mDisplayWidget->currentIndex());
+	settings.setValue("showDialog", !mCbRemember->isChecked());
+	settings.endGroup();
+}
 
-	return screenRects;
+int DkChooseMonitorDialog::exec() {
+
+	int answer = QDialog::exec();
+
+	if (answer == QDialog::Accepted)
+		saveSettings();
+
+	return answer;
+}
+
+QList<QScreen*> DkChooseMonitorDialog::screens() const {
+
+	return QGuiApplication::screens();
 }
 
 QRect DkChooseMonitorDialog::screenRect() const {
 	
-	return mScreenRects[mMonitorBox->currentIndex()];
+	return mDisplayWidget->screenRect();
+}
+
+bool DkChooseMonitorDialog::showDialog() const {
+	return !mCbRemember->isChecked();
 }
 
 } // close namespace

@@ -28,6 +28,10 @@ related links:
 
 #include "DkBasicWidgets.h"
 #include "DkUtils.h"
+#include "DkImageStorage.h"
+#include "DkSettings.h"
+
+#include <cassert>
 
 #pragma warning(push, 0)	// no warnings from includes
 #include <QLabel>
@@ -36,12 +40,17 @@ related links:
 #include <QSlider>
 #include <QPushButton>
 #include <QColorDialog>
+#include <QPainter>
+#include <QMouseEvent>
+#include <QMenu>
+#include <QWidgetAction>
+#include <QLineEdit>
 #pragma warning(pop)
 
 namespace nmc {
 
 // DkSlider --------------------------------------------------------------------
-DkSlider::DkSlider(QString title, QWidget* parent) : QWidget(parent) {
+DkSlider::DkSlider(QString title, QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 
@@ -142,7 +151,7 @@ void DkSlider::setValue(int value) {
 }
 
 // DkDoubleSlider --------------------------------------------------------------------
-DkDoubleSlider::DkDoubleSlider(const QString& title, QWidget* parent) : QWidget(parent) {
+DkDoubleSlider::DkDoubleSlider(const QString& title, QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 
@@ -185,6 +194,84 @@ void DkDoubleSlider::createLayout() {
 	connect(mSliderBox, SIGNAL(valueChanged(double)), this, SLOT(setValue(double)));
 }
 
+int DkDoubleSlider::map(double val) const {
+	
+	double minv = 0.0, maxv = 0.0;
+
+	if (mCenter != 0.0) {
+		if (val > mCenter) {
+			minv = mCenter;
+			maxv = mSliderBox->maximum();
+		}
+		else {
+			minv = mCenter;
+			maxv = mSliderBox->minimum();
+		}
+	}
+	else {
+		minv = mSliderBox->minimum();
+		maxv = mSliderBox->maximum();
+	}
+
+	// normalize
+	double nVal = (val - minv) / (maxv-minv);
+
+	if (mSliderInverted)
+		nVal = 1.0 - nVal;
+
+	double v = nVal * mSlider->maximum();
+	
+	if (mCenter != 0.0 && mSliderInverted)
+		v -= qRound(mSlider->maximum() / 2.0);
+	else if (mCenter != 0.0)
+		v += qRound(mSlider->maximum() / 2.0);
+
+	return qRound(v);
+}
+
+double DkDoubleSlider::mapInv(int val) const {
+
+	if (mCenter == 0.0) {
+
+		double minv = mSliderBox->minimum();
+		double maxv = mSliderBox->maximum();
+
+		double nVal = val / (double)mSlider->maximum();
+
+		if (mSliderInverted)
+			nVal = 1.0 - nVal;
+
+		return nVal * (maxv - minv) + minv;
+	}
+	else {
+
+		double mc = mSlider->maximum() / 2.0;
+		bool left = val < mc;
+
+		if (mSliderInverted)
+			left = !left;
+
+		double minv, maxv;
+		if (left) {
+			minv = mSliderBox->minimum();
+			maxv = mCenter;
+		}
+		else {
+			maxv = mSliderBox->maximum();
+			minv = mCenter;
+		}
+
+		double nVal = val / (double)mc;
+
+		if (mSliderInverted)
+			nVal = 1.0 - nVal;
+		else
+			nVal -= 1.0;
+
+		return nVal * (maxv - minv) + mCenter;
+	}
+}
+
 QSlider* DkDoubleSlider::getSlider() const {
 	return mSlider;
 }
@@ -195,6 +282,10 @@ void DkDoubleSlider::setMinimum(double minValue) {
 
 void DkDoubleSlider::setMaximum(double maxValue) {
 	mSliderBox->setMaximum(maxValue);
+}
+
+void DkDoubleSlider::setCenterValue(double center) {
+	mCenter = center;
 }
 
 void DkDoubleSlider::setTickInterval(double ticValue) {
@@ -215,16 +306,8 @@ void DkDoubleSlider::setSliderInverted(bool inverted) {
 
 void DkDoubleSlider::setValue(double value) {
 
-	double dr = mSliderBox->maximum() - mSliderBox->minimum();
-	double nVal = (value - mSliderBox->minimum()) / dr;
-
-	if (mSliderInverted)
-		nVal = 1.0 - nVal;
-	
-	int sVal = qRound(nVal * mSlider->maximum());
-
 	mSlider->blockSignals(true);
-	mSlider->setValue(sVal);
+	mSlider->setValue(map(value));
 	mSlider->blockSignals(false);
 
 	mSliderBox->blockSignals(true);
@@ -236,11 +319,7 @@ void DkDoubleSlider::setValue(double value) {
 
 void DkDoubleSlider::setIntValue(int value) {
 
-	double dr = mSliderBox->maximum() - mSliderBox->minimum();
-	double nVal = value / (double)mSlider->maximum();
-	if (mSliderInverted)
-		nVal = 1.0 - nVal;
-	double sVal = nVal * dr + mSliderBox->minimum();
+	double sVal = mapInv(value);
 	
 	mSlider->blockSignals(true);
 	mSlider->setValue(value);
@@ -254,7 +333,7 @@ void DkDoubleSlider::setIntValue(int value) {
 }
 
 // DkColorChooser ------------------------------------
-DkColorChooser::DkColorChooser(QColor defaultColor, QString text, QWidget* parent, Qt::WindowFlags flags) : QWidget(parent, flags) {
+DkColorChooser::DkColorChooser(QColor defaultColor, QString text, QWidget* parent, Qt::WindowFlags flags) : DkWidget(parent, flags) {
 
 	this->defaultColor = defaultColor;
 	this->mText = text;
@@ -347,7 +426,311 @@ void DkColorChooser::on_colorDialog_accepted() {
 	emit accepted();
 }
 
-DkRectWidget::DkRectWidget(const QRect& r, QWidget* parent) : QWidget(parent) {
+// -------------------------------------------------------------------- DkColorEdit 
+DkColorEdit::DkColorEdit(const QColor& col, QWidget* parent) : DkWidget(parent) {
+	
+	createLayout();
+	setColor(col);
+}
+
+void DkColorEdit::createLayout() {
+
+	mColBoxes.resize(c_end);
+
+	for (int idx = 0; idx < mColBoxes.size(); idx++) {
+		mColBoxes[idx] = new QSpinBox(this);
+		mColBoxes[idx]->setMinimum(0);
+		mColBoxes[idx]->setMaximum(255);
+		connect(mColBoxes[idx], SIGNAL(valueChanged(int)), this, SLOT(colorChanged()));
+	}
+
+	mColBoxes[r]->setPrefix("R: ");
+	mColBoxes[g]->setPrefix("G: ");
+	mColBoxes[b]->setPrefix("B: ");
+
+	mColHash = new QLineEdit(this);
+	connect(mColHash, SIGNAL(textEdited(const QString&)), this, SLOT(hashChanged(const QString&)));
+	connect(mColHash, SIGNAL(editingFinished()), this, SLOT(hashEditFinished()));
+
+	QGridLayout* gl = new QGridLayout(this);
+	gl->addWidget(mColBoxes[r], 1, 1);
+	gl->addWidget(mColBoxes[g], 2, 1);
+	gl->addWidget(mColBoxes[b], 3, 1);
+	gl->addWidget(mColHash, 4, 1);
+}
+
+void DkColorEdit::setColor(const QColor & col) {
+	mColor = col;
+
+	mColBoxes[r]->setValue(col.red());
+	mColBoxes[g]->setValue(col.green());
+	mColBoxes[b]->setValue(col.blue());
+
+	mColHash->setText(mColor.name());
+}
+
+QColor DkColorEdit::color() const {
+	return mColor;
+}
+
+void DkColorEdit::colorChanged() {
+
+	mColor = QColor(mColBoxes[r]->value(), mColBoxes[g]->value(), mColBoxes[b]->value());
+	mColHash->setText(mColor.name());
+
+	emit newColor(mColor);
+}
+
+void DkColorEdit::hashChanged(const QString& name) {
+
+	if (!name.startsWith("#"))
+		mColHash->setText("#" + mColHash->text());
+}
+
+void DkColorEdit::hashEditFinished() {
+
+	QColor nc;
+	nc.setNamedColor(mColHash->text());
+
+	if (nc.isValid()) {
+		setColor(nc);
+		emit newColor(nc);
+	}
+	else
+		mColHash->setText(mColor.name());
+}
+
+
+// -------------------------------------------------------------------- DkColorPane 
+DkColorPane::DkColorPane(QWidget* parent) : DkWidget(parent) {
+	mColor = QColor(255, 0, 0);
+}
+
+QColor DkColorPane::color() const {
+	return pos2Color(mPos);
+}
+
+void DkColorPane::setHue(int hue) {
+	mColor.setHsvF(hue/360.0, mColor.saturationF(), mColor.valueF());
+	update();
+	emit colorSelected(color());
+}
+
+double DkColorPane::hue() const {
+	return mColor.hueF();
+}
+
+void DkColorPane::setColor(const QColor & col) {
+	setHue(col.hue());
+	setPos(color2Pos(col));
+}
+
+void DkColorPane::paintEvent(QPaintEvent * ev) {
+
+	QPainter p(this);
+	p.setPen(Qt::NoPen);
+	p.setRenderHint(QPainter::Antialiasing);
+
+	// setup corners (white, pure color, black, black)
+	QColor c00, c01, c11, c10;
+	c00.setHsvF(mColor.hueF(), 0, 1);
+	c01.setHsvF(mColor.hueF(), 1, 1);
+	c10.setHsvF(mColor.hueF(), 0, 0);
+	c11.setHsvF(mColor.hueF(), 1, 0);
+
+	int w = width();
+	int h = height();
+
+	// draw
+	for (int idx = 0; idx < h; idx++) {
+
+		QColor ccs = ipl(c00, c10, (double)idx / h);
+		QColor cce = ipl(c01, c11, (double)idx / h);
+
+		QLinearGradient g(QPoint(0, 0), QPoint(w, 0));
+		g.setColorAt(0, ccs);
+		g.setColorAt(1, cce);
+		
+		QRect r(0, idx, w, 1);
+		p.fillRect(r, g);
+	}
+
+	QColor c = color();
+
+	// draw current selection
+	QPen pen;
+	pen.setColor(brightness(c) < 0.5 ? Qt::white : Qt::black);
+	p.setPen(pen);
+	QRectF cPick(0, 0, 11, 11);
+	cPick.moveCenter(mPos);
+	p.drawEllipse(cPick);
+
+	QWidget::paintEvent(ev);
+}
+
+void DkColorPane::mouseMoveEvent(QMouseEvent * me) {
+
+	if (me->buttons() == Qt::LeftButton)
+		setPos(me->pos());
+	QWidget::mouseMoveEvent(me);
+}
+
+void DkColorPane::mousePressEvent(QMouseEvent * me) {
+
+	if (me->button() == Qt::LeftButton)
+		setPos(me->pos());
+	QWidget::mousePressEvent(me);
+}
+
+void DkColorPane::mouseReleaseEvent(QMouseEvent * me) {
+
+	if (me->button() == Qt::LeftButton)
+		setPos(me->pos());
+	QWidget::mouseReleaseEvent(me);
+}
+
+void DkColorPane::resizeEvent(QResizeEvent * re) {
+
+	setPos(mPos);
+	QWidget::resizeEvent(re);
+}
+
+QPoint DkColorPane::color2Pos(const QColor & col) const {
+	
+	return QPoint(qRound(col.saturationF()*width()), qRound((1.0-col.valueF())*height()));
+}
+
+QColor DkColorPane::pos2Color(const QPoint & pos) const {
+
+	// setup corners (white, pure color, black, black)
+	QColor c00, c01, c11, c10;
+	c00.setHsvF(mColor.hueF(), 0, 1);
+	c01.setHsvF(mColor.hueF(), 1, 1);
+	c10.setHsvF(mColor.hueF(), 0, 0);
+	c11.setHsvF(mColor.hueF(), 1, 0);
+
+	QColor ccs = ipl(c00, c10, (double)pos.y()/height());
+	QColor cce = ipl(c01, c11, (double)pos.y()/height());
+
+	return ipl(ccs, cce, (double)pos.x()/width());
+}
+
+QColor DkColorPane::ipl(const QColor& c0, const QColor& c1, double alpha) const {
+
+	assert(alpha >= 0 && alpha <= 1.0);
+
+	double r = c0.redF() * (1.0 - alpha) + c1.redF() * alpha;
+	double g = c0.greenF() * (1.0 - alpha) + c1.greenF() * alpha;
+	double b = c0.blueF() * (1.0 - alpha) + c1.blueF() * alpha;
+
+	return QColor::fromRgbF(r, g, b);
+}
+
+void DkColorPane::setPos(const QPoint & pos) {
+
+	mPos.setX(qMin(qMax(pos.x(), 0), width()));
+	mPos.setY(qMin(qMax(pos.y(), 0), height()));
+
+	update();
+	emit colorSelected(color());
+}
+
+double DkColorPane::brightness(const QColor & col) const {
+	
+	return std::sqrt(
+		col.redF() * col.redF() * 0.241 +
+		col.greenF() * col.greenF() * 0.691 +
+		col.blueF() * col.blueF() * 0.068
+		);
+}
+
+// -------------------------------------------------------------------- DkColorPicker 
+DkColorPicker::DkColorPicker(QWidget* parent) : DkWidget(parent) {
+
+	createLayout();
+	QMetaObject::connectSlotsByName(this);
+}
+
+void DkColorPicker::createLayout() {
+
+	int bs = qRound(20 * DkSettingsManager::param().dpiScaleFactor());
+
+	// color pane
+	mColorPane = new DkColorPane(this);
+	mColorPane->setObjectName("mColorPane");
+	mColorPane->setBaseSize(100, 100);
+	mColorPane->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Preferred);
+
+	// hue slider
+	QSlider* hueSlider = new QSlider(this);
+	hueSlider->setObjectName("cpHueSlider");
+	hueSlider->setMaximum(360);
+	hueSlider->setValue(360);
+	hueSlider->setFixedWidth(bs);
+
+	// current color
+	mColorPreview = new QLabel("", this);
+	mColorPreview->setFixedHeight(bs);
+
+	QPushButton* mMenu = new QPushButton(DkImage::loadIcon(":/nomacs/img/bars.svg", QSize(bs, bs), Qt::white), "", this);
+	mMenu->setObjectName("flatWhite");
+	mMenu->setFlat(true);
+	mMenu->setFixedSize(bs, bs);
+
+	QGridLayout* hb = new QGridLayout(this);
+	hb->setContentsMargins(0, 0, 0, 0);
+	hb->addWidget(mColorPane, 0, 0);
+	hb->addWidget(hueSlider, 0, 1);
+	hb->addWidget(mColorPreview, 1, 0);
+	hb->addWidget(mMenu, 1, 1);
+
+	connect(hueSlider, SIGNAL(valueChanged(int)), mColorPane, SLOT(setHue(int)));
+	connect(mColorPane, SIGNAL(colorSelected(const QColor&)), this, SIGNAL(colorSelected(const QColor&)));
+	connect(mColorPane, SIGNAL(colorSelected(const QColor&)), this, SLOT(setColor(const QColor&)));
+	connect(mMenu, SIGNAL(clicked()), this, SLOT(showMenu()));
+
+	setColor(mColorPane->color());
+}
+
+void DkColorPicker::showMenu(const QPoint & pos) {
+
+	if (!mContextMenu) {
+
+		mContextMenu = new QMenu(this);
+		mColorEdit = new DkColorEdit(color(), this);
+		connect(mColorEdit, SIGNAL(newColor(const QColor&)), this, SLOT(setColor(const QColor&)));
+		connect(mColorEdit, SIGNAL(newColor(const QColor&)), mColorPane, SLOT(setColor(const QColor&)));
+
+		QWidgetAction* a = new QWidgetAction(this);
+		a->setDefaultWidget(mColorEdit);
+		mContextMenu->addAction(a);
+	}
+
+	mColorEdit->setColor(color());
+	mContextMenu->exec(!pos.isNull() ? pos : mapToGlobal(geometry().bottomRight()));
+}
+
+void DkColorPicker::setColor(const QColor& col) {
+
+	mColorPreview->setStyleSheet("background-color: " + DkUtils::colorToString(col));
+}
+
+QColor DkColorPicker::color() const {
+
+	return mColorPane->color();
+}
+
+void DkColorPicker::contextMenuEvent(QContextMenuEvent * cme) {
+
+	showMenu(cme->globalPos());
+
+	// do not propagate
+	//QWidget::contextMenuEvent(cme);
+}
+
+
+// -------------------------------------------------------------------- DkRectWidget 
+DkRectWidget::DkRectWidget(const QRect& r, QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	setRect(r);

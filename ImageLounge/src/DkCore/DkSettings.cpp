@@ -30,6 +30,7 @@
 
 #pragma warning(push, 0)	// no warnings from includes - begin
 #include <iostream>
+#include <cassert>
 
 #include <QImageReader>
 #include <QScreen>
@@ -71,7 +72,8 @@ void DkSettings::init() {
 		QT_TRANSLATE_NOOP("nmc::DkMetaData","Flash") <<
 		QT_TRANSLATE_NOOP("nmc::DkMetaData","Focal Length") <<
 		QT_TRANSLATE_NOOP("nmc::DkMetaData","Exposure Mode") <<
-		QT_TRANSLATE_NOOP("nmc::DkMetaData","Exposure Time");
+		QT_TRANSLATE_NOOP("nmc::DkMetaData","Exposure Time") <<
+		QT_TRANSLATE_NOOP("nmc::DkMetaData", "Compression");
 
 	sdescriptionDesc = QStringList() <<
 		QT_TRANSLATE_NOOP("nmc::DkMetaData","Rating") <<
@@ -203,6 +205,7 @@ void DkSettings::initFileFilters() {
 	app_p.containerFilters.append("Microsoft PowerPoint Document (*.pptx)");
 	app_p.containerFilters.append("Microsoft Excel Document (*.xlsx)");
 	app_p.containerFilters.append("Comic Book Archive (*.cbz)");
+	app_p.containerFilters.append("Krita (*.kra)");
 	
 	app_p.openFilters += app_p.containerFilters;
 
@@ -211,6 +214,9 @@ void DkSettings::initFileFilters() {
 	// finally: fabians filter & OpenCV vecs
 	app_p.openFilters.append("OpenCV Haar Training (*.vec)");
 	app_p.openFilters.append("Rohkost (*.roh)");
+
+    // drif images
+    app_p.openFilters.append("Developers Raw Image Format (*.drif)");
 
 	// load user filters
 	DefaultSettings settings;
@@ -250,7 +256,7 @@ void DkSettings::loadTranslation(const QString& fileName, QTranslator& translato
 	for (int idx = 0; idx < translationDirs.size(); idx++) {
 
 		if (translator.load(fileName, translationDirs[idx])) {
-			//qInfoClean() << "translation loaded from: " << translationDirs[idx] << "/" << fileName;
+			qDebugClean() << "translation loaded from: " << translationDirs[idx] << "/" << fileName;
 			break;
 		}
 	}
@@ -261,12 +267,15 @@ QStringList DkSettings::getTranslationDirs() {
 	QStringList trDirs;
 	trDirs << DkUtils::getTranslationPath();
 	trDirs << qApp->applicationDirPath();
-	trDirs << qApp->applicationDirPath() + QDir::separator() + "translations";
+	
+	QStringList rDirs;
+	rDirs << qApp->applicationDirPath();
+	rDirs << QStandardPaths::standardLocations(QStandardPaths::DataLocation);
 
-	// still needed?
-	QDir d = QDir(qApp->applicationDirPath());
-	if (d.cd("../share/nomacs/translations/"))
-		trDirs << d.absolutePath();
+	for (const QString& d : rDirs)
+		trDirs << d + QDir::separator() + "translations";
+
+	trDirs.removeDuplicates();
 
 	return trDirs;
 }
@@ -319,13 +328,17 @@ void DkSettings::load(QSettings& settings, bool defaults) {
 	tmpShow = settings.value("showMetaDataDock", app_p.showMetaDataDock).toBitArray();
 	if (tmpShow.size() == app_p.showMetaDataDock.size())	
 		app_p.showMetaDataDock = tmpShow;
-	tmpShow = settings.value("showEditDock", app_p.showMetaDataDock).toBitArray();
+	tmpShow = settings.value("showEditDock", app_p.showEditDock).toBitArray();
 	if (tmpShow.size() == app_p.showEditDock.size())	
 		app_p.showEditDock = tmpShow;
 	tmpShow = settings.value("showHistoryDock", app_p.showHistoryDock).toBitArray();
 	if (tmpShow.size() == app_p.showHistoryDock.size())	
 		app_p.showHistoryDock = tmpShow;
+	tmpShow = settings.value("showLogDock", app_p.showLogDock).toBitArray();
+	if (tmpShow.size() == app_p.showLogDock.size())
+		app_p.showLogDock = tmpShow;
 
+	app_p.hideAllPanels = settings.value("hideAllPanels", app_p.hideAllPanels).toBool();
 	app_p.closeOnEsc = settings.value("closeOnEsc", app_p.closeOnEsc).toBool();
 	app_p.showRecentFiles = settings.value("showRecentFiles", app_p.showRecentFiles).toBool();
 	app_p.useLogFile = settings.value("useLogFile", app_p.useLogFile).toBool();
@@ -361,7 +374,6 @@ void DkSettings::load(QSettings& settings, bool defaults) {
 	global_p.pinnedFiles = settings.value("pinnedFiles", global_p.pinnedFiles).toStringList();
 	global_p.recentFiles = settings.value("recentFiles", global_p.recentFiles).toStringList();
 	global_p.logRecentFiles = settings.value("logRecentFiles", global_p.logRecentFiles).toBool();
-	global_p.useTmpPath = settings.value("useTmpPath", global_p.useTmpPath).toBool();
 	global_p.askToSaveDeletedFiles = settings.value("askToSaveDeletedFiles", global_p.askToSaveDeletedFiles).toBool();
 	global_p.tmpPath = settings.value("tmpPath", global_p.tmpPath).toString();
 	global_p.language = settings.value("language", global_p.language).toString();
@@ -398,7 +410,7 @@ void DkSettings::load(QSettings& settings, bool defaults) {
 	display_p.showCrop = settings.value("showCrop", display_p.showCrop).toBool();
 	display_p.histogramStyle = settings.value("histogramStyle", display_p.histogramStyle).toInt();
 	display_p.tpPattern = settings.value("tpPattern", display_p.tpPattern).toBool();
-	display_p.themeName = settings.value("themeName", display_p.themeName).toString();
+	display_p.themeName = settings.value("themeName312", display_p.themeName).toString();
 	display_p.showBorder = settings.value("showBorder", display_p.showBorder).toBool();
 	display_p.displaySquaredThumbs = settings.value("displaySquaredThumbs", display_p.displaySquaredThumbs).toBool();
 	display_p.showThumbLabel = settings.value("showThumbLabel", display_p.showThumbLabel).toBool();
@@ -456,6 +468,7 @@ void DkSettings::load(QSettings& settings, bool defaults) {
 	resources_p.filterDuplicats = settings.value("filterDuplicates", resources_p.filterDuplicats).toBool();
 	resources_p.preferredExtension = settings.value("preferredExtension", resources_p.preferredExtension).toString();	
 	resources_p.gammaCorrection = settings.value("gammaCorrection", resources_p.gammaCorrection).toBool();
+	resources_p.loadSavedImage = settings.value("loadSavedImage", resources_p.loadSavedImage).toInt();
 
 	if (sync_p.switchModifier) {
 		global_p.altMod = Qt::ControlModifier;
@@ -485,9 +498,9 @@ void DkSettings::load(QSettings& settings, bool defaults) {
 	}
 }
 
-void DkSettings::save() {
+void DkSettings::save(bool force) {
 	DefaultSettings s;
-	save(s);
+	save(s, force);
 }
 
 void DkSettings::save(QSettings& settings, bool force) {
@@ -532,6 +545,10 @@ void DkSettings::save(QSettings& settings, bool force) {
 		settings.setValue("showEditDock", app_p.showEditDock);
 	if (force ||app_p.showHistoryDock != app_d.showHistoryDock)
 		settings.setValue("showHistoryDock", app_p.showHistoryDock);
+	if (force || app_p.showLogDock != app_d.showLogDock)
+		settings.setValue("showLogDock", app_p.showLogDock);
+	if (force || app_p.hideAllPanels != app_d.hideAllPanels)
+		settings.setValue("hideAllPanels", app_p.hideAllPanels);
 	if (force ||app_p.advancedSettings != app_d.advancedSettings)
 		settings.setValue("advancedSettings", app_p.advancedSettings);
 	if (force ||app_p.closeOnEsc != app_d.closeOnEsc)
@@ -576,8 +593,6 @@ void DkSettings::save(QSettings& settings, bool force) {
 		settings.setValue("pinnedFiles", global_p.pinnedFiles);
 	if (force ||global_p.logRecentFiles != global_d.logRecentFiles)
 		settings.setValue("logRecentFiles", global_p.logRecentFiles);
-	if (force ||global_p.useTmpPath != global_d.useTmpPath)
-		settings.setValue("useTmpPath", global_p.useTmpPath);
 	if (force ||global_p.askToSaveDeletedFiles != global_d.askToSaveDeletedFiles)
 		settings.setValue("askToSaveDeletedFiles", global_p.askToSaveDeletedFiles);
 	if (force ||global_p.tmpPath != global_d.tmpPath)
@@ -644,7 +659,7 @@ void DkSettings::save(QSettings& settings, bool force) {
 	if (force ||display_p.tpPattern != display_d.tpPattern)
 		settings.setValue("tpPattern", display_p.tpPattern);
 	if (force || display_p.themeName != display_d.themeName)
-		settings.setValue("themeName", display_p.themeName);
+		settings.setValue("themeName312", display_p.themeName);
 	if (force ||display_p.showBorder != display_d.showBorder)
 		settings.setValue("showBorder", display_p.showBorder);
 	if (force ||display_p.displaySquaredThumbs != display_d.displaySquaredThumbs)
@@ -733,6 +748,9 @@ void DkSettings::save(QSettings& settings, bool force) {
 		settings.setValue("preferredExtension", resources_p.preferredExtension);
 	if (force ||resources_p.gammaCorrection != resources_d.gammaCorrection)
 		settings.setValue("gammaCorrection", resources_p.gammaCorrection);
+	if (force || resources_p.loadSavedImage != resources_d.loadSavedImage)
+		settings.setValue("loadSavedImage", resources_p.loadSavedImage);
+
 	settings.endGroup();
 
 	// keep loaded settings in mind
@@ -764,8 +782,10 @@ void DkSettings::setToDefaultSettings() {
 	app_p.showMetaDataDock = QBitArray(mode_end, false);
 	app_p.showEditDock = QBitArray(mode_end, false);
 	app_p.showHistoryDock = QBitArray(mode_end, false);
+	app_p.showLogDock = QBitArray(mode_end, false);
 	app_p.advancedSettings = false;
 	app_p.closeOnEsc = false;
+	app_p.hideAllPanels = false;
 	app_p.showRecentFiles = true;
 	app_p.browseFilters = QStringList();
 	app_p.showMenuBar = true;
@@ -792,9 +812,8 @@ void DkSettings::setToDefaultSettings() {
 	global_p.searchHistory = QStringList();
 	global_p.recentFolders = QStringList();
 	global_p.logRecentFiles = true;
-	global_p.useTmpPath = false;
 	global_p.askToSaveDeletedFiles = false;
-	global_p.tmpPath = QString();
+	global_p.tmpPath = "";
 	global_p.language = "en";
 	global_p.setupPath = "";
 	global_p.setupVersion = "";
@@ -833,11 +852,11 @@ void DkSettings::setToDefaultSettings() {
 	display_p.showCrop = false;
 	display_p.histogramStyle = 0; // DkHistogram::DisplayMode::histogram_mode_simple
 	display_p.tpPattern = false;
-	display_p.themeName = "Light Theme.css";
+	display_p.themeName = "Light-Theme.css";
 	display_p.showBorder = false;
 	display_p.displaySquaredThumbs = true;
 	display_p.showThumbLabel = false;
-	display_p.showScrollBars = true;
+	display_p.showScrollBars = false;
 	display_p.animationDuration = 0.5f;
 	display_p.alwaysAnimate = false;
 	display_p.transition = trans_swipe;
@@ -849,7 +868,7 @@ void DkSettings::setToDefaultSettings() {
 	slideShow_p.time = 3.0;
 	slideShow_p.moveSpeed = 0;		// TODO: set to 1 for finishing slideshow
 	slideShow_p.display = QBitArray(display_end, true);
-	slideShow_p.backgroundColor = QColor(86, 86, 90, 255);
+	slideShow_p.backgroundColor = QColor(51, 51, 51, 255);
 	slideShow_p.silentFullscreen = true;
 
 	meta_p.saveExifOrientation = true;
@@ -870,6 +889,7 @@ void DkSettings::setToDefaultSettings() {
 	resources_p.filterDuplicats = false;
 	resources_p.preferredExtension = "*.jpg";
 	resources_p.gammaCorrection = true;
+	resources_p.loadSavedImage = ls_load_to_tab;
 	resources_p.waitForLastImg = true;
 
 	qDebug() << "ok... default settings are set";
@@ -1015,15 +1035,14 @@ void DkSettingsManager::init() {
 
 	qInfo() << "Hi there";
 	qInfoClean() << "my name is " << QApplication::organizationName() << " | " << QApplication::applicationName() 
-		<< " v " << QApplication::applicationVersion() << (nmc::DkSettingsManager::param().isPortable() ? " portable" : " installed");
-
+		<< " v" << QApplication::applicationVersion() << (nmc::DkSettingsManager::param().isPortable() ? " (portable)" : " (installed)");
 }
 
 void DkSettingsManager::importSettings(const QString & settingsPath) {
 
 	QSettings settings(settingsPath, QSettings::IniFormat);
 	param().load(settings);
-	param().save();
+	param().save(true);
 
 	qInfo() << "settings imported...";
 }
@@ -1327,7 +1346,19 @@ QString DkThemeManager::getCurrentThemeName() const {
 
 QString DkThemeManager::themeDir() const {
 
-	QDir themeDir(QCoreApplication::applicationDirPath() + "/themes");
+	QStringList paths;
+	paths << QCoreApplication::applicationDirPath();
+	paths << QStandardPaths::standardLocations(QStandardPaths::DataLocation);
+
+	QDir themeDir;
+
+	for (const QString& p : paths) {
+		themeDir = QDir(p + QDir::separator() + "themes");
+
+		if (themeDir.exists())
+			break;
+	}
+
 	return themeDir.absolutePath();
 }
 
@@ -1413,7 +1444,8 @@ void DkThemeManager::applyTheme() const {
 QString DkThemeManager::cleanThemeName(const QString & theme) const {
 	
 	QString t = theme;
-	t.replace(".css", "");
+	t = t.replace(".css", "");
+	t = t.replace("-", " ");
 	
 	return t;
 }
@@ -1513,5 +1545,167 @@ QString DkThemeManager::replaceColors(const QString & cssString) const {
 	return cs;
 }
 
+// -------------------------------------------------------------------- DkZoomConfig 
+DkZoomConfig::DkZoomConfig() {
+
+	mLevels = defaultLevels();
+
+	DefaultSettings ds;
+	loadSettings(ds);
+}
+
+DkZoomConfig& DkZoomConfig::instance() {
+	static DkZoomConfig inst;
+	return inst;
+}
+
+DkZoomConfig::~DkZoomConfig() {
+
+	DefaultSettings ds;
+	saveSettings(ds);
+}
+
+double DkZoomConfig::nextFactor(double currentFactor, double delta) const {
+
+	// do nothing?
+	if (!mUseLevels)
+		return delta;
+
+	assert(currentFactor != 0.0);
+
+	if (currentFactor == 0.0)
+		return 1.0;
+
+	if (delta > 1) {
+		for (double l : mLevels) {
+
+			if (currentFactor < l) {
+				return l / currentFactor;
+			}
+		}
+	}
+	else if (delta < 1) {
+
+		for (int idx = mLevels.size() - 1; idx >= 0; idx--) {
+
+			if (currentFactor > mLevels[idx]) {
+				return mLevels[idx] / currentFactor;
+			}
+		}
+	}
+
+	// do nothing
+	return 1.0;
+}
+
+QVector<double> DkZoomConfig::defaultLevels() const {
+
+	QVector<double> levels;
+
+	levels << 0.0001;
+	levels << 0.001;
+	levels << 0.01;
+	levels << 0.05;
+	levels << 0.1;
+	levels << 0.125;
+	levels << 0.166;
+	levels << 0.25;
+	levels << 0.333;
+	levels << 0.5;
+	levels << 0.66;
+	levels << 1;
+	levels << 1.5;
+	levels << 2;
+	levels << 3;
+	levels << 4;
+	levels << 5;
+	levels << 6;
+	levels << 7;
+	levels << 8;
+	levels << 12;
+	levels << 16;
+	levels << 32;
+	levels << 64;
+	levels << 128;
+
+	return levels;
+}
+
+bool DkZoomConfig::useLevels() const {
+	return mUseLevels;
+}
+
+void DkZoomConfig::setUseLevels(bool useLevels) {
+	mUseLevels = useLevels;
+}
+
+bool DkZoomConfig::setLevels(const QString & levelStr) {
+
+	QVector<double> levels;
+	QStringList levelList = levelStr.split(",");
+
+	bool ok = false;
+	for (const QString& s : levelList) {
+		levels << s.toDouble(&ok);
+		if (!ok)
+			break;
+	}
+
+	if (ok && checkLevels(levels)) {
+		mLevels = levels;
+		return true;
+	}
+	
+	return false;
+}
+
+QString DkZoomConfig::levelsToString() const {
+	
+	QStringList levelStr;
+	for (double l : mLevels)
+		levelStr << QString::number(l);
+	
+	return levelStr.join(",");
+}
+
+void DkZoomConfig::setLevelsToDefault() {
+
+	mLevels = defaultLevels();
+}
+
+bool DkZoomConfig::checkLevels(const QVector<double>& levels) {
+
+	if (levels.isEmpty())
+		return false;
+
+	double last = 0;
+
+	// levels must be monotonically increasing
+	for (double l : levels) {
+		if (l < last)
+			return false;
+	}
+
+	return true;
+}
+
+void DkZoomConfig::loadSettings(QSettings & settings) {
+
+	settings.beginGroup("zooming");
+	QString levelStr = settings.value("zoomLevels").toString();
+	mUseLevels = settings.value("useLevels").toBool();
+	settings.endGroup();
+
+	if (!setLevels(levelStr))
+		qWarning() << "illegal zoom levels when loading from settings:" << levelStr;
+}
+
+void DkZoomConfig::saveSettings(QSettings & settings) const {
+
+	settings.beginGroup("zooming");
+	settings.setValue("zoomLevels", levelsToString());
+	settings.setValue("useLevels", mUseLevels);
+	settings.endGroup();
+}
 
 }

@@ -32,8 +32,6 @@
 #include <QPointer>
 #pragma warning(pop)		// no warnings from includes - end
 
-//#include "DkNetwork.h"
-
 // Qt includes
 class QTimer;
 
@@ -106,8 +104,8 @@ public slots:
 	void hideMenu();
 
 protected:
-	void enterEvent(QEvent* event);
-	void leaveEvent(QEvent* event);
+	void enterEvent(QEvent* event) override;
+	void leaveEvent(QEvent* event) override;
 
 private:
 	QList<QMenu*> mMenus;
@@ -148,10 +146,9 @@ class DkTcpMenu : public QMenu {
 
 public:
 
-	DkTcpMenu(const QString& title = QString(), QWidget* parent = 0, DkManagerThread* clientThread = 0);
+	DkTcpMenu(const QString& title = QString(), QWidget* parent = 0);
 	~DkTcpMenu();
 
-	void setClientManager(DkManagerThread* clientThread);
 	void addTcpAction(QAction* tcpAction);
 	void showNoClientsFound(bool show);
 	void clear();
@@ -168,7 +165,6 @@ protected slots:
 protected:
 
 	QList<QAction*> mTcpActions;
-	DkManagerThread* mClientThread = 0;
 	bool mNoClientsFound = false;
 };
 }

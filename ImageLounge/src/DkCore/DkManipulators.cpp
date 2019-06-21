@@ -47,8 +47,8 @@ DkBaseManipulator::DkBaseManipulator(QAction * action) {
 	
 	// add default icon
 	if (mAction->icon().isNull()) {
-		QSize size(21, 21);
-		mAction->setIcon(DkImage::loadIcon(":/nomacs/img/manipulation.svg", size));
+		QSize size(22, 22);
+		mAction->setIcon(DkImage::loadIcon(":/nomacs/img/sliders.svg", size));
 	}
 }
 
@@ -118,6 +118,11 @@ void DkManipulatorManager::createManipulators(QWidget* parent) {
 	action->setStatusTip(QObject::tr("Create a Tiny Planet"));
 	mpls[m_tiny_planet] = QSharedPointer<DkTinyPlanetManipulator>::create(action);
 
+	// tiny planet
+	action = new QAction(DkImage::loadIcon(":/nomacs/img/bucket.svg", size), QObject::tr("&Background Color..."), parent);
+	action->setStatusTip(QObject::tr("Add a background color"));
+	mpls[m_color] = QSharedPointer<DkColorManipulator>::create(action);
+
 	// unsharp mask
 	action = new QAction(DkImage::loadIcon(":/nomacs/img/sharpen.svg", size), QObject::tr("&Sharpen..."), parent);
 	action->setStatusTip(QObject::tr("Sharpens the image by applying an unsharp mask"));
@@ -128,13 +133,18 @@ void DkManipulatorManager::createManipulators(QWidget* parent) {
 	action->setStatusTip(QObject::tr("Rotate the image"));
 	mpls[m_rotate] = QSharedPointer<DkRotateManipulator>::create(action);
 
-	// rotate
+	// resize
+	action = new QAction(DkImage::loadIcon(":/nomacs/img/resize.svg", size), QObject::tr("&Resize..."), parent);
+	action->setStatusTip(QObject::tr("Resize the image"));
+	mpls[m_resize] = QSharedPointer<DkResizeManipulator>::create(action);
+
+	// threshold
 	action = new QAction(DkImage::loadIcon(":/nomacs/img/threshold.svg", size), QObject::tr("&Threshold..."), parent);
 	action->setStatusTip(QObject::tr("Threshold the image"));
 	mpls[m_threshold] = QSharedPointer<DkThresholdManipulator>::create(action);
 
 	// hue/saturation
-	action = new QAction(QObject::tr("&Hue/Saturation..."), parent);
+	action = new QAction(DkImage::loadIcon(":/nomacs/img/sliders.svg", size), QObject::tr("&Hue/Saturation..."), parent);
 	action->setStatusTip(QObject::tr("Change Hue and Saturation"));
 	mpls[m_hue] = QSharedPointer<DkHueManipulator>::create(action);
 

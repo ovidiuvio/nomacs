@@ -41,20 +41,23 @@
 #include <QLabel>
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QComboBox>
 #pragma warning(pop)
 
 namespace nmc {
 
 // DkManipulatorWidget --------------------------------------------------------------------
-DkManipulatorWidget::DkManipulatorWidget(QWidget* parent) : DkWidget(parent) {
+DkManipulatorWidget::DkManipulatorWidget(QWidget* parent) : DkFadeWidget(parent) {
 	
 	// create widgets
 	DkActionManager& am = DkActionManager::instance();
 	mWidgets << new DkTinyPlanetWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_tiny_planet), this);
 	mWidgets << new DkUnsharpMaskWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_unsharp_mask), this);
 	mWidgets << new DkRotateWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_rotate), this);
+	mWidgets << new DkResizeWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_resize), this);
 	mWidgets << new DkThresholdWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_threshold), this);
 	mWidgets << new DkHueWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_hue), this);
+	mWidgets << new DkColorWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_color), this);
 	mWidgets << new DkExposureWidget(am.manipulatorManager().manipulatorExt(DkManipulatorManager::m_exposure), this);
 
 	setObjectName("DkPreferenceTabs");
@@ -85,7 +88,7 @@ void DkManipulatorWidget::createLayout() {
 		auto mpl = am.manipulatorManager().manipulatorExt((DkManipulatorManager::ManipulatorExtId)idx);
 
 		DkTabEntryWidget* entry = new DkTabEntryWidget(mpl->action()->icon(), mpl->name(), this);
-		connect(entry, SIGNAL(clicked()), mpl->action(), SIGNAL(triggered()), Qt::UniqueConnection);	// TODO: different connection if ManipulatorExt?
+		connect(entry, SIGNAL(clicked()), mpl->action(), SIGNAL(triggered()), Qt::UniqueConnection);
 		
 		aLayout->addWidget(entry);
 		group->addButton(entry);
@@ -137,7 +140,6 @@ void DkManipulatorWidget::createLayout() {
 	QWidget* mplWidget = new QWidget(this);
 	QVBoxLayout* mplLayout = new QVBoxLayout(mplWidget);
 	mplLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
-	
 	mplLayout->addWidget(mTitleLabel);
 	for (QWidget* w : mWidgets) 
 		mplLayout->addWidget(w);
@@ -167,7 +169,7 @@ void DkManipulatorWidget::setImage(QSharedPointer<DkImageContainerT> imgC) {
 
 	if (mImgC) {
 
-		QImage img = mImgC->imageScaledToWidth(qMin(mPreview->width(), 300));
+		QImage img = mImgC->imageScaledToWidth(qMin(mPreview->width(), mMaxPreview));
 		img = scaledPreview(img);
 
 		mPreview->setPixmap(QPixmap::fromImage(img));
@@ -188,7 +190,7 @@ void DkManipulatorWidget::selectManipulator() {
 	// compute preview
 	if (mpl && mImgC) {
 		DkTimer dt;
-		QImage img = mpl->apply(mImgC->imageScaledToWidth(qMin(mPreview->width(), 300)));
+		QImage img = mpl->apply(mImgC->imageScaledToWidth(qMin(mPreview->width(), mMaxPreview)));
 		img = scaledPreview(img);
 
 		if (!img.isNull())
@@ -201,6 +203,11 @@ void DkManipulatorWidget::selectManipulator() {
 
 	if (!mplExt) {
 		mTitleLabel->hide();
+		return;
+	}
+
+	if (!mplExt->widget()) {
+		qCritical() << action->text() << "does not have a corresponding UI";
 		return;
 	}
 
@@ -226,7 +233,7 @@ void DkEditDock::setImage(QSharedPointer<DkImageContainerT> imgC) {
 }
 
 // DkManipulatorWidget --------------------------------------------------------------------
-DkBaseManipulatorWidget::DkBaseManipulatorWidget(QSharedPointer<DkBaseManipulatorExt> manipulator, QWidget* parent) : DkWidget(parent) {
+DkBaseManipulatorWidget::DkBaseManipulatorWidget(QSharedPointer<DkBaseManipulatorExt> manipulator, QWidget* parent) : DkFadeWidget(parent) {
 	mBaseManipulator = manipulator;
 }
 
@@ -328,7 +335,6 @@ DkRotateWidget::DkRotateWidget(QSharedPointer<DkBaseManipulatorExt> manipulator,
 	manipulator->setWidget(this);
 }
 
-
 QSharedPointer<DkRotateManipulator> DkRotateWidget::manipulator() const {
 	return qSharedPointerDynamicCast<DkRotateManipulator>(baseManipulator());
 }
@@ -344,8 +350,75 @@ void DkRotateWidget::createLayout() {
 	QVBoxLayout* sliderLayout = new QVBoxLayout(this);
 	sliderLayout->addWidget(angleSlider);
 }
+
 void DkRotateWidget::on_angleSlider_valueChanged(int val) {
 	manipulator()->setAngle(val);
+}
+
+// DkRotateWidget --------------------------------------------------------------------
+DkResizeWidget::DkResizeWidget(QSharedPointer<DkBaseManipulatorExt> manipulator, QWidget* parent) : DkBaseManipulatorWidget(manipulator, parent) {
+	createLayout();
+	QMetaObject::connectSlotsByName(this);
+
+	manipulator->setWidget(this);
+
+	// I would have loved setObjectName to be virtual : )
+	connect(this, SIGNAL(objectNameChanged(const QString&)), this, SLOT(onObjectNameChanged(const QString&)));
+}
+
+QSharedPointer<DkResizeManipulator> DkResizeWidget::manipulator() const {
+	return qSharedPointerDynamicCast<DkResizeManipulator>(baseManipulator());
+}
+
+void DkResizeWidget::onObjectNameChanged(const QString & name) {
+	
+	if (name == "darkManipulator") {
+		// this is a hack: if we don't do this, nmc--DkBaseManipulatorWidget#darkManipulator QComboBox QAbstractItemView get's applied
+		// I have the feeling, that this is a Qt issue
+		// without this line, all styles are applied to the QComboBox but not to its drop down list (QAbstractItemView)
+		mIplBox->setStyleSheet(mIplBox->styleSheet() + " ");
+	}
+}
+
+void DkResizeWidget::createLayout() {
+
+	DkDoubleSlider* scaleSlider = new DkDoubleSlider(tr("Scale"), this);
+	scaleSlider->setObjectName("scaleFactorSlider");
+	scaleSlider->setMinimum(0.1);
+	scaleSlider->setCenterValue(1.0);
+	scaleSlider->setMaximum(10);
+	scaleSlider->setValue(manipulator()->scaleFactor());
+
+	mIplBox = new QComboBox(this);
+	mIplBox->setObjectName("iplBox");
+	mIplBox->setView(new QListView());	// needed for style
+	mIplBox->addItem(tr("Nearest Neighbor"), DkImage::ipl_nearest);
+	mIplBox->addItem(tr("Area (best for downscaling)"), DkImage::ipl_area);
+	mIplBox->addItem(tr("Linear"), DkImage::ipl_linear);
+	mIplBox->addItem(tr("Bicubic (4x4 interpolatia)"), DkImage::ipl_cubic);
+	mIplBox->addItem(tr("Lanczos (8x8 interpolation)"), DkImage::ipl_lanczos);
+	mIplBox->setCurrentIndex(1);
+
+	QCheckBox* cbGamma = new QCheckBox(tr("Gamma Correction"), this);
+	cbGamma->setObjectName("gammaCorrection");
+
+	QVBoxLayout* sliderLayout = new QVBoxLayout(this);
+	sliderLayout->setSpacing(10);
+	sliderLayout->addWidget(scaleSlider);
+	sliderLayout->addWidget(mIplBox);
+	sliderLayout->addWidget(cbGamma);
+}
+
+void DkResizeWidget::on_scaleFactorSlider_valueChanged(double val) {
+	manipulator()->setScaleFactor(val);
+}
+
+void DkResizeWidget::on_iplBox_currentIndexChanged(int idx) {
+	manipulator()->setInterpolation(mIplBox->itemData(idx).toInt());
+}
+
+void DkResizeWidget::on_gammaCorrection_toggled(bool checked) {
+	manipulator()->setCorrectGamma(checked);
 }
 
 // DkThresholdWidget --------------------------------------------------------------------
@@ -383,6 +456,34 @@ void DkThresholdWidget::createLayout() {
 }
 void DkThresholdWidget::on_thrSlider_valueChanged(int val) {
 	manipulator()->setThreshold(val);
+}
+
+// -------------------------------------------------------------------- DkColorWidget 
+DkColorWidget::DkColorWidget(QSharedPointer<DkBaseManipulatorExt> manipulator, QWidget* parent) : DkBaseManipulatorWidget(manipulator, parent) {
+	createLayout();
+
+	QMetaObject::connectSlotsByName(this);
+
+	manipulator->setWidget(this);
+	setMinimumHeight(150);
+}
+
+QSharedPointer<DkColorManipulator> DkColorWidget::manipulator() const {
+	return qSharedPointerDynamicCast<DkColorManipulator>(baseManipulator());
+}
+
+void DkColorWidget::createLayout() {
+
+	DkColorPicker* cp = new DkColorPicker(this);
+	cp->setObjectName("colPicker");
+
+	QVBoxLayout* l = new QVBoxLayout(this);
+	l->setContentsMargins(0, 0, 0, 0);
+	l->addWidget(cp);
+}
+
+void DkColorWidget::on_colPicker_colorSelected(const QColor& col) {
+	manipulator()->setColor(col);
 }
 
 // DkHueWidget --------------------------------------------------------------------
@@ -447,7 +548,6 @@ DkExposureWidget::DkExposureWidget(QSharedPointer<DkBaseManipulatorExt> manipula
 	manipulator->setWidget(this);
 }
 
-
 QSharedPointer<DkExposureManipulator> DkExposureWidget::manipulator() const {
 	return qSharedPointerDynamicCast<DkExposureManipulator>(baseManipulator());
 }
@@ -456,8 +556,8 @@ void DkExposureWidget::createLayout() {
 
 	DkDoubleSlider* exposureSlider = new DkDoubleSlider(tr("Exposure"), this);
 	exposureSlider->setObjectName("exposureSlider");
-	exposureSlider->setMinimum(-20.0);
-	exposureSlider->setMaximum(20.0);
+	exposureSlider->setMinimum(-3);
+	exposureSlider->setMaximum(3);
 	exposureSlider->setTickInterval(0.0005);
 	exposureSlider->setValue(manipulator()->exposure());
 
@@ -471,6 +571,7 @@ void DkExposureWidget::createLayout() {
 	DkDoubleSlider* gammaSlider = new DkDoubleSlider(tr("Gamma"), this);
 	gammaSlider->setObjectName("gammaSlider");
 	gammaSlider->setMinimum(0);
+	gammaSlider->setCenterValue(1);
 	gammaSlider->setMaximum(10);
 	gammaSlider->setTickInterval(0.001);
 	gammaSlider->setSliderInverted(true);
@@ -483,7 +584,11 @@ void DkExposureWidget::createLayout() {
 }
 
 void DkExposureWidget::on_exposureSlider_valueChanged(double val) {
-	manipulator()->setExposure(val);
+
+	double tv = val*val;
+	if (val < 0)
+		tv *= -1.0;
+	manipulator()->setExposure(tv);
 }
 
 void DkExposureWidget::on_offsetSlider_valueChanged(double val) {

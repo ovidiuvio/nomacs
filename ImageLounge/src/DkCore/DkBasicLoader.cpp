@@ -53,7 +53,7 @@
 
 // quazip
 #ifdef WITH_QUAZIP
-#include <quazip/JlCompress.h>
+#include <quazip5/JlCompress.h>
 #endif
 
 // opencv
@@ -83,7 +83,7 @@
 //#endif // defined(Q_OS_MAC) || defined(Q_OS_OPENBSD)
 
 #include <tiffio.h>
-//#include <tiffio.hxx>		// this is needed if you want to load tiffs from the buffer
+#include <tiffio.hxx>		// this is needed if you want to load tiffs from the buffer
 
 //#if defined(Q_OS_MAC) || defined(Q_OS_OPENBSD)
 #undef uint64
@@ -174,7 +174,9 @@ bool DkBasicLoader::loadGeneral(const QString& filePath, QSharedPointer<QByteArr
 
 		try {
 			mMetaData->readMetaData(filePath, ba);
-
+			
+#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
+			// this is a workaroung for old Qt5 versions where jpgs with 'illegal' orientation=0 were not loaded
 			if (!DkSettingsManager::param().metaData().ignoreExifOrientation) {
 				DkMetaDataT::ExifOrientationState orState = mMetaData->checkExifOrientation();
 				
@@ -184,6 +186,7 @@ bool DkBasicLoader::loadGeneral(const QString& filePath, QSharedPointer<QByteArr
 					qWarning() << "deleting illegal EXIV orientation...";
 				}
 			}
+#endif
 		}
 		catch (...) {}	// ignore if we cannot read the metadata
 	}
@@ -195,6 +198,10 @@ bool DkBasicLoader::loadGeneral(const QString& filePath, QSharedPointer<QByteArr
 	QString suf = fInfo.suffix().toLower();
 
 	QImage img;
+
+    // load drif file
+    if (!imgLoaded && ("drif" == suf || "yuv" == suf || "raw" == suf)) 
+        imgLoaded = loadDrifFile(mFile, img, ba);
 
 	if (!imgLoaded && !fInfo.exists() && ba && !ba->isEmpty()) {
 		imgLoaded = img.loadFromData(*ba.data());
@@ -227,7 +234,7 @@ bool DkBasicLoader::loadGeneral(const QString& filePath, QSharedPointer<QByteArr
 		if (imgLoaded) mLoader = qt_loader;
 	}
 
-	// OpenCV Tiff loader
+	// OpenCV Tiff loader - supports jpg compressed tiffs
 	if (!imgLoaded && newSuffix.contains(QRegExp("(tif|tiff)", Qt::CaseInsensitive))) {
 
 		imgLoaded = loadTIFFile(mFile, img, ba);
@@ -260,17 +267,42 @@ bool DkBasicLoader::loadGeneral(const QString& filePath, QSharedPointer<QByteArr
 		if (imgLoaded) mLoader = raw_loader;
 	}
 
+	// TGA loader
+	if (!imgLoaded && newSuffix.contains(QRegExp("(tga)", Qt::CaseInsensitive))) {
+
+		imgLoaded = loadTgaFile(mFile, img, ba);
+
+		if (imgLoaded) mLoader = tga_loader;		// TODO: add tga loader
+	}
+
+	QByteArray lba;
+
 	// default Qt loader
 	if (!imgLoaded && !newSuffix.contains(QRegExp("(roh)", Qt::CaseInsensitive))) {
 
 		// if we first load files to buffers, we can additionally load images with wrong extensions (rainer bugfix : )
 		// TODO: add warning here
-		QByteArray lba;
 		loadFileToBuffer(mFile, lba);
 		imgLoaded = img.loadFromData(lba);
 		
+		if (imgLoaded)
+			qWarning() << "The image seems to have a wrong extension";
+		
 		if (imgLoaded) mLoader = qt_loader;
 	} 
+
+	// add marker to fix broken panorama images from SAMSUNG
+	// see: https://github.com/nomacs/nomacs/issues/254
+	if (!imgLoaded && newSuffix.contains(QRegExp("(jpg|jpeg)", Qt::CaseInsensitive))) {
+
+		// prefer external buffer
+		QByteArray baf = DkImage::fixSamsungPanorama(ba && !ba->isEmpty() ? *ba : lba);
+
+		if (!baf.isEmpty())
+			imgLoaded = img.loadFromData(baf, suf.toStdString().c_str());
+
+		if (imgLoaded) mLoader = qt_loader;
+	}
 
 	// this loader is a bit buggy -> be carefull
 	if (!imgLoaded && newSuffix.contains(QRegExp("(roh)", Qt::CaseInsensitive))) {
@@ -288,7 +320,7 @@ bool DkBasicLoader::loadGeneral(const QString& filePath, QSharedPointer<QByteArr
 
 	// tiff things
 	if (imgLoaded && !mPageIdxDirty)
-		indexPages(mFile);
+		indexPages(mFile, ba);
 	mPageIdxDirty = false;
 
 	if (imgLoaded && loadMetaData && mMetaData) {
@@ -310,9 +342,9 @@ bool DkBasicLoader::loadGeneral(const QString& filePath, QSharedPointer<QByteArr
 		setEditImage(img, tr("Original Image"));
 
 	if (imgLoaded)
-		qInfo() << filePath << "loaded in" << dt;
+		qInfo() << "[Basic Loader]" << filePath << "loaded in" << dt;
 	else
-		qWarning() << "could not load" << filePath;
+		qWarning() << "[Basic Loader] could not load" << filePath;
 
 	return imgLoaded;
 }
@@ -382,6 +414,19 @@ bool DkBasicLoader::loadRohFile(const QString& filePath, QImage& img, QSharedPoi
 	//}
 
 	return imgLoaded;
+}
+
+bool nmc::DkBasicLoader::loadTgaFile(const QString & filePath, QImage & img, QSharedPointer<QByteArray> ba) const {
+	
+	if (!ba || ba->isEmpty())
+		ba = loadFileToBuffer(filePath);
+
+	tga::DkTgaLoader tl = tga::DkTgaLoader(ba);
+
+	bool success = tl.load();
+	img = tl.image();
+
+	return success;
 }
 
 /**
@@ -460,16 +505,33 @@ bool DkBasicLoader::loadTIFFile(const QString& filePath, QImage& img, QSharedPoi
 	oldErrorHandler = TIFFSetErrorHandler(NULL);
 
 	DkTimer dt;
-
 	TIFF* tiff = 0;
-	
-	//if (!ba.isNull()) {
-	//	// use an istream to read from memory
-	//	TIFF* mem_TIFF = TIFFStreamOpen("MemTIFF", &is);
-	//}
-	
+
+
+// TODO: currently TIFFStreamOpen can only be linked on Windows?!
+#if QT_VERSION >= QT_VERSION_CHECK(5,5,0) && defined(Q_OS_WIN)
+
+	std::istringstream is(ba ? ba->toStdString() : "");
+
+	if (ba) 
+		tiff = TIFFStreamOpen("MemTIFF", &is);
+
+	// fallback to direct loading
 	if (!tiff)
 		tiff = TIFFOpen(filePath.toLatin1(), "r");
+
+	// loading from buffer allows us to load files with non-latin names
+	QSharedPointer<QByteArray> bal;
+	if (!tiff)
+		bal = loadFileToBuffer(filePath);
+
+	std::istringstream isl(bal ? bal->toStdString() : "");
+
+	if (bal)
+		tiff = TIFFStreamOpen("MemTIFF", &isl);
+#else
+	tiff = TIFFOpen(filePath.toLatin1(), "r");
+#endif
 
 	if (!tiff)
 		return success;
@@ -500,6 +562,189 @@ bool DkBasicLoader::loadTIFFile(const QString& filePath, QImage& img, QSharedPoi
 
 #endif // !WITH_LIBTIFF
 	return false;
+}
+
+#define DRIF_IMAGE_IMPL
+#include "drif_image.h"
+
+bool isQtFmtCompatible(uint32_t f)
+{
+    switch (f)
+    {
+    case DRIF_FMT_RGB888:
+    case DRIF_FMT_RGBA8888:
+    case DRIF_FMT_GRAY:
+        return true;
+    }
+
+    return false;
+}
+
+uint32_t drif2qtfmt(uint32_t f)
+{
+    switch (f)
+    {
+    case DRIF_FMT_RGB888:  return QImage::Format_RGB888;
+    case DRIF_FMT_RGBA8888:  return QImage::Format_RGBA8888;
+
+	// grayscale 8 was added in Qt 5.4
+#if QT_VERSION >= 0x050500
+	case DRIF_FMT_GRAY:  return QImage::Format_Grayscale8;
+#endif
+
+    }
+
+    return QImage::Format_Invalid;
+}
+
+bool DkBasicLoader::loadDrifFile(const QString& filePath, QImage& img, QSharedPointer<QByteArray> ba) const {
+
+    bool success = false;
+
+    uint32_t w;
+    uint32_t h;
+    uint32_t f;
+
+    uint8_t* imgBytes = drifLoadImg(filePath.toLatin1(), &w, &h, &f);
+
+    if (!imgBytes)
+        return success;
+    
+    if (isQtFmtCompatible(f))
+    {
+        img = QImage((int)w, (int)h, (QImage::Format)drif2qtfmt(f));
+        memcpy(reinterpret_cast<void*>(img.bits()), imgBytes, drifGetSize(w, h, f));
+
+        success = true;
+    }
+#ifdef WITH_OPENCV
+    else
+    {
+        img = QImage((int)w, (int)h, QImage::Format_RGB888);
+
+        switch (f)
+        {
+        case DRIF_FMT_BGR888:
+        {
+            cv::Mat imgMat = cv::Mat((int)h, (int)w, CV_8UC3, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_BGR2RGB);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_RGB888P:
+        case DRIF_FMT_RGBA8888P:
+        {
+            cv::Mat imgMatR = cv::Mat((int)h, (int)w, CV_8UC1, imgBytes);
+            cv::Mat imgMatG = cv::Mat((int)h, (int)w, CV_8UC1, imgBytes + w * h);
+            cv::Mat imgMatB = cv::Mat((int)h, (int)w, CV_8UC1, imgBytes + 2 * w * h);
+            cv::Mat rgbMat  = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            
+            std::vector<cv::Mat> imgMat{ imgMatR, imgMatG, imgMatB };
+            cv::merge(imgMat, rgbMat);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_BGR888P:
+        case DRIF_FMT_BGRA8888P:
+        {
+            cv::Mat imgMatB = cv::Mat((int)h, (int)w, CV_8UC1, imgBytes);
+            cv::Mat imgMatG = cv::Mat((int)h, (int)w, CV_8UC1, imgBytes + w * h);
+            cv::Mat imgMatR = cv::Mat((int)h, (int)w, CV_8UC1, imgBytes + 2 * w * h);
+            cv::Mat rgbMat  = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+
+            std::vector<cv::Mat> imgMat{ imgMatR, imgMatG, imgMatB };
+            cv::merge(imgMat, rgbMat);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_BGRA8888:
+        {
+            cv::Mat imgMat = cv::Mat((int)h, (int)w, CV_8UC4, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_BGR2RGB, 3);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_RGBA8888:
+        {
+            cv::Mat imgMat = cv::Mat((int)h, (int)w, CV_8UC4, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_RGBA2RGB, 3);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_GRAY:
+        {
+            cv::Mat imgMat = cv::Mat((int)h, (int)w, CV_8UC1, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_GRAY2RGB);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_YUV420P:
+        {
+            cv::Mat imgMat = cv::Mat((int)h + h / 2, (int)w, CV_8UC1, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_YUV2RGB_I420);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_YVU420P:
+        {
+            cv::Mat imgMat = cv::Mat((int)h + h / 2, (int)w, CV_8UC1, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_YUV2RGB_YV12);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_NV12:
+        {
+            cv::Mat imgMat = cv::Mat((int)h + h / 2, (int)w, CV_8UC1, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_YUV2RGB_NV12);
+
+            success = true;
+        }
+        break;
+
+        case DRIF_FMT_NV21:
+        {
+            cv::Mat imgMat = cv::Mat((int)h + h / 2, (int)w, CV_8UC1, imgBytes);
+            cv::Mat rgbMat = cv::Mat((int)h, (int)w, CV_8UC3, reinterpret_cast<uint8_t*>(img.bits()));
+            cv::cvtColor(imgMat, rgbMat, CV_YUV2RGB_NV21);
+
+            success = true;
+        }
+        break;
+
+        default:
+            success = false;
+            break;
+        }
+       
+    }
+#endif
+   
+    drifFreeImg(imgBytes);
+
+    return success;
 }
 
 void DkBasicLoader::setImage(const QImage & img, const QString & editName, const QString & file) {
@@ -582,30 +827,34 @@ void DkBasicLoader::setHistoryIndex(int idx) {
 	mImageIndex = idx;
 }
 
-void DkBasicLoader::loadFileToBuffer(const QString& fileInfo, QByteArray& ba) const {
+void DkBasicLoader::loadFileToBuffer(const QString& filePath, QByteArray& ba) const {
 
-	if (!QFileInfo(fileInfo).exists())
+	QFileInfo fi(filePath);
+
+	if (!fi.exists())
 		return;
 
 #ifdef WITH_QUAZIP
-	if (QFileInfo(fileInfo).dir().path().contains(DkZipContainer::zipMarker())) 
-		DkZipContainer::extractImage(DkZipContainer::decodeZipFile(fileInfo), DkZipContainer::decodeImageFile(fileInfo), ba);
+	if (fi.dir().path().contains(DkZipContainer::zipMarker())) 
+		DkZipContainer::extractImage(DkZipContainer::decodeZipFile(filePath), DkZipContainer::decodeImageFile(filePath), ba);
 #endif
 	
-	QFile file(fileInfo);
+	QFile file(filePath);
 	file.open(QIODevice::ReadOnly);
 
 	ba = file.readAll();
 }
 
-QSharedPointer<QByteArray> DkBasicLoader::loadFileToBuffer(const QString& fileInfo) const {
+QSharedPointer<QByteArray> DkBasicLoader::loadFileToBuffer(const QString& filePath) const {
+
+	QFileInfo fi(filePath);
 
 #ifdef WITH_QUAZIP
-	if (QFileInfo(fileInfo).dir().path().contains(DkZipContainer::zipMarker())) 
-		return DkZipContainer::extractImage(DkZipContainer::decodeZipFile(fileInfo), DkZipContainer::decodeImageFile(fileInfo));
+	if (fi.dir().path().contains(DkZipContainer::zipMarker())) 
+		return DkZipContainer::extractImage(DkZipContainer::decodeZipFile(filePath), DkZipContainer::decodeImageFile(filePath));
 #endif
 
-	QFile file(fileInfo);
+	QFile file(filePath);
 	file.open(QIODevice::ReadOnly);
 
 	QSharedPointer<QByteArray> ba(new QByteArray(file.readAll()));
@@ -631,7 +880,7 @@ bool DkBasicLoader::writeBufferToFile(const QString& fileInfo, const QSharedPoin
 	return true;
 }
 
-void DkBasicLoader::indexPages(const QString& filePath) {
+void DkBasicLoader::indexPages(const QString& filePath, const QSharedPointer<QByteArray> ba) {
 
 	// reset counters
 	mNumPages = 1;
@@ -651,7 +900,30 @@ void DkBasicLoader::indexPages(const QString& filePath) {
 	oldErrorHandler = TIFFSetErrorHandler(NULL); 
 
 	DkTimer dt;
-	TIFF* tiff = TIFFOpen(filePath.toLatin1(), "r");	// this->mFile was here before - not sure why
+	TIFF* tiff = 0;
+
+#if QT_VERSION >= QT_VERSION_CHECK(5,5,0) && defined(Q_OS_WIN)
+	std::istringstream is(ba ? ba->toStdString() : "");
+
+	if (ba)
+		tiff = TIFFStreamOpen("MemTIFF", &is);
+
+	// read from file
+	if (!tiff)
+		tiff = TIFFOpen(filePath.toLatin1(), "r");	// this->mFile was here before - not sure why
+
+	// loading from buffer allows us to load files with non-latin names
+	QSharedPointer<QByteArray> bal;
+	if (!tiff)
+		bal = loadFileToBuffer(filePath);;
+	std::istringstream isl(bal ? bal->toStdString() : "");
+
+	if (bal)
+		tiff = TIFFStreamOpen("MemTIFF", &isl);
+#else
+	// read from file
+	tiff = TIFFOpen(filePath.toLatin1(), "r");	// this->mFile was here before - not sure why
+#endif
 
 	if (!tiff) 
 		return;
@@ -710,7 +982,18 @@ bool DkBasicLoader::loadPageAt(int pageIdx) {
 
 	DkTimer dt;
 	TIFF* tiff = TIFFOpen(mFile.toLatin1(), "r");
+
+#if QT_VERSION >= QT_VERSION_CHECK(5,5,0) && defined(Q_OS_WIN)
+
+	// loading from buffer allows us to load files with non-latin names
+	QSharedPointer<QByteArray> ba;
+	if (!tiff)
+		ba = loadFileToBuffer(mFile);
 	
+	std::istringstream is(ba ? ba->toStdString() : "");
+	if (ba)
+		tiff = TIFFStreamOpen("MemTIFF", &is);
+#endif
 
 	if (!tiff)
 		return imgLoaded;
@@ -724,7 +1007,6 @@ bool DkBasicLoader::loadPageAt(int pageIdx) {
 		if (!TIFFReadDirectory(tiff))
 			return false;
 	}
-
 	TIFFGetField(tiff, TIFFTAG_IMAGEWIDTH, &width);
 	TIFFGetField(tiff, TIFFTAG_IMAGELENGTH, &height);
 
@@ -800,7 +1082,6 @@ QString DkBasicLoader::save(const QString& filePath, const QImage& img, int comp
 
 	QSharedPointer<QByteArray> ba;
 
-
 	DkTimer dt;
 	if (saveToBuffer(filePath, img, ba, compression) && ba) {
 
@@ -830,7 +1111,6 @@ bool DkBasicLoader::saveToBuffer(const QString& filePath, const QImage& img, QSh
 		saved = saveWindowsIcon(img, ba);
 	}
 #if QT_VERSION < 0x050000 // qt5 natively supports r/w webp
-
 	else if (fInfo.suffix().contains("webp", Qt::CaseInsensitive)) {
 		saved = saveWebPFile(img, ba, compression);
 	}
@@ -925,8 +1205,9 @@ void DkBasicLoader::saveMetaData(const QString& filePath, QSharedPointer<QByteAr
 	if (!ba)
 		ba = QSharedPointer<QByteArray>(new QByteArray());
 
-	if (ba->isEmpty() && mMetaData->isDirty())
+	if (ba->isEmpty() && mMetaData->isDirty()) {
 		ba = loadFileToBuffer(filePath);
+	}
 
 	bool saved = false;
 	try {
@@ -1569,9 +1850,8 @@ bool DkRawLoader::load(const QSharedPointer<QByteArray> ba) {
 
 		mImg = raw2Img(iProcessor, rawMat);
 
-		qDebug() << "img size" << mImg.size();
-		qDebug() << "raw mat size" << rawMat.rows << "x" << rawMat.cols;
-
+		//qDebug() << "img size" << mImg.size();
+		//qDebug() << "raw mat size" << rawMat.rows << "x" << rawMat.cols;
 		iProcessor.recycle();
 		rawMat.release();
 	}
@@ -1971,5 +2251,177 @@ QImage DkRawLoader::raw2Img(const LibRaw & iProcessor, cv::Mat & img) const {
 }
 
 #endif
+
+// -------------------------------------------------------------------- DkTgaLoader 
+namespace tga {
+	
+	DkTgaLoader::DkTgaLoader(QSharedPointer<QByteArray> ba) {
+
+		mBa = ba;
+	}
+
+	QImage DkTgaLoader::image() const {
+		return mImg;
+	}
+
+	bool DkTgaLoader::load() {
+		
+		if (!mBa || mBa->isEmpty())
+			return false;
+		
+		return load(mBa);
+	}
+
+	bool DkTgaLoader::load(QSharedPointer<QByteArray> ba) {
+		
+
+		// this code is from: http://www.paulbourke.net/dataformats/tga/
+		// thanks!
+		Header header;
+
+		const char* dataC = ba->data();
+
+		/* Display the header fields */
+		header.idlength = *dataC; dataC++;
+		header.colourmaptype = *dataC; dataC++;
+		header.datatypecode = *dataC; dataC++;
+
+		const short* dataS = (const short*)dataC;
+
+		header.colourmaporigin = *dataS; dataS++;
+		header.colourmaplength = *dataS; dataS++;
+		dataC = (const char*)dataS;
+		header.colourmapdepth = *dataC; dataC++;
+		dataS = (const short*)dataC;
+		header.x_origin = *dataS; dataS++;
+		header.y_origin = *dataS; dataS++;
+		header.width = *dataS; dataS++;
+		header.height = *dataS; dataS++;
+		dataC = (const char*)dataS;
+		header.bitsperpixel = *dataC; dataC++;
+		header.imagedescriptor = *dataC; dataC++;
+
+#ifdef _DEBUG
+		qDebug() << "TGA Header ------------------------------";
+		qDebug() << "ID length:         " << (int)header.idlength;
+		qDebug() << "Colourmap type:    " << (int)header.colourmaptype;
+		qDebug() << "Image type:        " << (int)header.datatypecode;
+		qDebug() << "Colour map offset: " << header.colourmaporigin;
+		qDebug() << "Colour map length: " << header.colourmaplength;
+		qDebug() << "Colour map depth:  " << (int)header.colourmapdepth;
+		qDebug() << "X origin:          " << header.x_origin;
+		qDebug() << "Y origin:          " << header.y_origin;
+		qDebug() << "Width:             " << header.width;
+		qDebug() << "Height:            " << header.height;
+		qDebug() << "Bits per pixel:    " << (int)header.bitsperpixel;
+		qDebug() << "Descriptor:        " << (int)header.imagedescriptor;
+#endif
+
+		/* What can we handle */
+		if (header.datatypecode != 2 && header.datatypecode != 10) {
+			qWarning() << "Can only handle image type 2 and 10";
+			return false;
+		}
+		
+		if (header.bitsperpixel != 16 &&
+			header.bitsperpixel != 24 && 
+			header.bitsperpixel != 32) {
+			qWarning() << "Can only handle pixel depths of 16, 24, and 32";
+			return false;
+		}
+
+		if (header.colourmaptype != 0 && header.colourmaptype != 1) {
+			qWarning() << "Can only handle colour map types of 0 and 1";
+			return false;
+		}
+
+		Pixel *pixels = new Pixel[header.width*header.height * sizeof(Pixel)];
+
+		if (!pixels) {
+			qWarning() << "TGA: could not allocate" << header.width*header.height * sizeof(Pixel)/1024 << "KB";
+			return false;
+		}
+
+		///* Skip over unnecessary stuff */
+		int skipover = header.idlength;
+		skipover += header.colourmaptype * header.colourmaplength;
+		dataC += skipover;
+		
+		/* Read the image */
+		int bytes2read = header.bitsperpixel / 8;	// save?
+		unsigned char p[5];
+		
+		for (int n = 0; n < header.width * header.height;) {
+			
+			if (header.datatypecode == 2) {                     /* Uncompressed */
+				
+				// TODO: out-of-bounds not checked here...
+				for (int bi = 0; bi < bytes2read; bi++, dataC++)
+					p[bi] = *dataC;
+				
+				mergeBytes(&(pixels[n]), p, bytes2read);
+				n++;
+			}
+			else if (header.datatypecode == 10) {             /* Compressed */
+				
+				for (int bi = 0; bi < bytes2read+1; bi++, dataC++)
+					p[bi] = *dataC;
+
+				int j = p[0] & 0x7f;
+				mergeBytes(&(pixels[n]), &(p[1]), bytes2read);
+				n++;
+				if (p[0] & 0x80) {         /* RLE chunk */
+					for (int i = 0; i < j; i++) {
+						mergeBytes(&(pixels[n]), &(p[1]), bytes2read);
+						n++;
+					}
+				}
+				else {                   /* Normal chunk */
+					for (int i = 0; i < j; i++) {
+
+						for (int bi = 0; bi < bytes2read; bi++, dataC++)
+							p[bi] = *dataC;
+
+						mergeBytes(&(pixels[n]), p, bytes2read);
+						n++;
+					}
+				}
+			}
+		}
+
+		mImg = QImage((uchar*)pixels, header.width, header.height, QImage::Format_ARGB32);
+		mImg = mImg.copy();
+
+		// I somehow expected the 5th bit to be 0x10 -> but Paul seems to have a 0th bit : )
+		if (!(header.imagedescriptor & 0x20))
+			mImg = mImg.mirrored();
+
+		delete[] pixels;
+
+		return true;
+	}
+
+	void DkTgaLoader::mergeBytes(Pixel * pixel, unsigned char * p, int bytes) const {
+		
+		if (bytes == 4) {
+			pixel->r = p[0];
+			pixel->g = p[1];
+			pixel->b = p[2];
+			pixel->a = p[3];
+		}
+		else if (bytes == 3) {
+			pixel->r = p[0];
+			pixel->g = p[1];
+			pixel->b = p[2];
+			pixel->a = 255;
+		}
+		else if (bytes == 2) {
+			pixel->r = (p[0] & 0x1f) << 3;
+			pixel->g = ((p[1] & 0x03) << 6) | ((p[0] & 0xe0) >> 2);
+			pixel->b = (p[1] & 0x7c) << 1;
+			pixel->a = 255;// (p[1] & 0x80);
+		}
+	}
+}
 
 }

@@ -30,13 +30,13 @@
 #include "DkImageContainer.h"
 #include "DkBatchInfo.h"
 #include "DkSettings.h"
+#include "DkBaseWidgets.h"
 
 #pragma warning(push, 0)	// no warnings from includes - begin
 #include <QStringList>
 #include <QString>
 #include <QImage>
 #include <QGraphicsView>
-#include <QToolBar>
 #include <QFileInfo>
 #include <QApplication>
 #include <QMainWindow>
@@ -173,11 +173,11 @@ public:
 	virtual void setVisible(bool visible) = 0;
 };
 
-class DllCoreExport DkPluginViewPort : public QWidget {
+class DllCoreExport DkPluginViewPort : public DkWidget {
 	Q_OBJECT
 
 public:
-	DkPluginViewPort(QWidget* parent = 0, Qt::WindowFlags flags = 0) : QWidget(parent, flags) {
+	DkPluginViewPort(QWidget* parent = 0, Qt::WindowFlags flags = 0) : DkWidget(parent, flags) {
 		
 		setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::MinimumExpanding);
 		//setStyleSheet("QGraphicsView{background-color: QColor(100,0,0,20); border: 1px solid #FFFFFF;}");
@@ -195,7 +195,6 @@ public:
 
 signals:
 	void closePlugin(bool askForSaving = false) const;
-	void showToolBar(QToolBar* toolbar, bool show) const;
 	void loadFile(const QString& filePath) const;
 	void loadImage(const QImage& image) const;
 	void showInfo(const QString& msg) const;
@@ -234,4 +233,4 @@ protected:
 // Change this version number if DkPluginInterface is changed!
 Q_DECLARE_INTERFACE(nmc::DkPluginInterface, "com.nomacs.ImageLounge.DkPluginInterface/3.6")
 Q_DECLARE_INTERFACE(nmc::DkBatchPluginInterface, "com.nomacs.ImageLounge.DkBatchPluginInterface/3.6")
-Q_DECLARE_INTERFACE(nmc::DkViewPortInterface, "com.nomacs.ImageLounge.DkViewPortInterface/3.7")
+Q_DECLARE_INTERFACE(nmc::DkViewPortInterface, "com.nomacs.ImageLounge.DkViewPortInterface/3.8")

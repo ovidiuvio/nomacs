@@ -55,7 +55,6 @@ DkThumbNail::DkThumbNail(const QString& filePath, const QImage& img) {
 	mImg = DkImage::createThumb(img);
 	mFile = filePath;
 	mMaxThumbSize = qRound(max_thumb_size * DkSettingsManager::param().dpiScaleFactor());
-	mMinThumbSize = DkSettingsManager::param().effectiveThumbSize();
 	mImgExists = true;
 }
 
@@ -67,9 +66,9 @@ DkThumbNail::~DkThumbNail() {}
  **/ 
 void DkThumbNail::compute(int forceLoad) {
 
-	// we do this that complicated to be thread-safe
+	// this is so complicated to be thread-safe
 	// if we use member vars in the thread and the object gets deleted during thread execution we crash...
-	mImg = computeIntern(mFile, QSharedPointer<QByteArray>(), forceLoad, mMaxThumbSize, mMinThumbSize);
+	mImg = computeIntern(mFile, QSharedPointer<QByteArray>(), forceLoad, mMaxThumbSize);
 	mImg = DkImage::createThumb(mImg);
 }
 
@@ -86,7 +85,7 @@ void DkThumbNail::compute(int forceLoad) {
  * could be loaded at all.
  **/ 
 QImage DkThumbNail::computeIntern(const QString& filePath, const QSharedPointer<QByteArray> ba, 
-								  int forceLoad, int maxThumbSize, int minThumbSize) {
+								  int forceLoad, int maxThumbSize) {
 	
 	DkTimer dt;
 	//qDebug() << "[thumb] file: " << file.absoluteFilePath();
@@ -118,121 +117,63 @@ QImage DkThumbNail::computeIntern(const QString& filePath, const QSharedPointer<
 	}
 	removeBlackBorder(thumb);
 
-	if (thumb.isNull() && forceLoad == force_exif_thumb)
-		return QImage();
-
 	bool exifThumb = !thumb.isNull();
 
-	int orientation = metaData.getOrientationDegree();
-	int imgW = thumb.width();
-	int imgH = thumb.height();
-	int tS = minThumbSize;
-
-	// as found at: http://olliwang.com/2010/01/30/creating-thumbnail-images-in-qt/
 	QFileInfo fInfo(filePath);
 	QString lFilePath = fInfo.isSymLink() ? fInfo.symLinkTarget() : filePath;
 	fInfo = lFilePath;
 
-	QImageReader* imageReader = 0;
-	
-	if (!ba || ba->isEmpty())
-		imageReader = new QImageReader(lFilePath);
-	else {
-		QBuffer buffer;
-		buffer.setData(ba->data());
-		buffer.open(QIODevice::ReadOnly);
-		imageReader = new QImageReader(&buffer, fInfo.suffix().toStdString().c_str());
-		buffer.close();
-	}
-
-	if (thumb.isNull() || (thumb.width() < tS && thumb.height() < tS)) {
-
-		imgW = imageReader->size().width();		// crash detected: unhandled exception at 0x66850E9A (msvcr110d.dll) in nomacs.exe: 0xC0000005: Access violation reading location 0x0000C788.
-		imgH = imageReader->size().height();	// locks the file!
-	}
-	
-	if (forceLoad != DkThumbNailT::force_exif_thumb && (imgW > maxThumbSize || imgH > maxThumbSize)) {
-		if (imgW > imgH) {
-			imgH = qRound((float)maxThumbSize / imgW * imgH);
-			imgW = maxThumbSize;
-		} 
-		else if (imgW < imgH) {
-			imgW = qRound((float)maxThumbSize / imgH * imgW);
-			imgH = maxThumbSize;
-		}
-		else {
-			imgW = maxThumbSize;
-			imgH = maxThumbSize;
-		}
-	}
-
 	// diem: do_not_force is the generic load - so also rescale these
-	bool rescale = forceLoad == force_save_thumb || forceLoad == do_not_force;
+	bool rescale = forceLoad == do_not_force;
 
-	if (forceLoad != force_exif_thumb && 
-			(thumb.isNull() || 
-			(thumb.width() < tS && thumb.height() < tS) || 
-			forceLoad == force_full_thumb || 
-			forceLoad == force_save_thumb)) { // braces
-		
-		// flip size if the image is rotated by 90°
-		if (metaData.isTiff() && abs(orientation) == 90) {
-			int tmpW = imgW;
-			imgW = imgH;
-			imgH = tmpW;
-			qDebug() << "EXIF size is flipped...";
-		}
-
-		imageReader->setScaledSize(QSize(imgW, imgH));
-		thumb = imageReader->read();
+	if ((forceLoad != force_exif_thumb || fInfo.size() < 1e5) &&
+		(thumb.isNull() ||
+		 forceLoad == force_full_thumb ||
+		 forceLoad == force_save_thumb)) { // braces
 
 		// try to read the image
-		if (thumb.isNull()) {
-			DkBasicLoader loader;
-			
-			if (baZip && !baZip->isEmpty())	{
-				if (loader.loadGeneral(lFilePath, baZip, true, true))
+		DkBasicLoader loader;
+
+		if (baZip && !baZip->isEmpty()) {
+			if (loader.loadGeneral(lFilePath, baZip, true, true))
 				thumb = loader.image();
+		}
+		else {
+			if (loader.loadGeneral(lFilePath, ba, true, true))
+				thumb = loader.image();
+		}
+	}
+
+	if (thumb.isNull() && forceLoad == force_exif_thumb)
+		return QImage();
+
+	// the image is not scaled correctly yet
+	if (rescale && !thumb.isNull()) {
+
+		int w = thumb.width();
+		int h = thumb.height();
+
+		if (w > maxThumbSize || h > maxThumbSize) {
+			if (w > h) {
+				h = qRound((double)maxThumbSize / w * h);
+				w = maxThumbSize;
+			} 
+			else if (w < h) {
+				w = qRound((double)maxThumbSize / h * w);
+				h = maxThumbSize;
 			}
 			else {
-				if (loader.loadGeneral(lFilePath, ba, true, true))
-					thumb = loader.image();
+				w = maxThumbSize;
+				h = maxThumbSize;
 			}
 		}
 
-		// the image is not scaled correctly yet
-		if (rescale && !thumb.isNull() && (imgW == -1 || imgH == -1)) {
-			imgW = thumb.width();
-			imgH = thumb.height();
-
-			if (imgW > maxThumbSize || imgH > maxThumbSize) {
-				if (imgW > imgH) {
-					imgH = qRound((float)maxThumbSize / imgW * imgH);
-					imgW = maxThumbSize;
-				} 
-				else if (imgW < imgH) {
-					imgW = qRound((float)maxThumbSize / imgH * imgW);
-					imgH = maxThumbSize;
-				}
-				else {
-					imgW = maxThumbSize;
-					imgH = maxThumbSize;
-				}
-			}
-
-			thumb = thumb.scaled(QSize(imgW*2, imgH*2), Qt::KeepAspectRatio, Qt::FastTransformation);
-			thumb = thumb.scaled(QSize(imgW, imgH), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-		}
-
-		// is there a nice solution to do so??
-		imageReader->setFileName("josef");	// image reader locks the file -> but there should not be one so we just set it to another file...
-	}
-	else if (rescale) {
-		thumb = thumb.scaled(QSize(imgW, imgH), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+		// scale
+		thumb = thumb.scaled(QSize(w*2, h*2), Qt::KeepAspectRatio, Qt::FastTransformation);
+		thumb = thumb.scaled(QSize(w, h), Qt::KeepAspectRatio, Qt::SmoothTransformation);
 	}
 
-	if (imageReader)
-		delete imageReader;
+	int orientation = metaData.getOrientationDegree();
 
 	if (orientation != -1 && orientation != 0 && (metaData.isJpg() || metaData.isRaw())) {
 		QTransform rotationMatrix;
@@ -252,7 +193,7 @@ QImage DkThumbNail::computeIntern(const QString& filePath, const QSharedPointer<
 				sThumb = sThumb.transformed(rotationMatrix);
 			}
 
-			metaData.setThumbnail(sThumb);
+			metaData.updateImageMetaData(sThumb);
 
 			if (!ba || ba->isEmpty())
 				metaData.saveMetaData(lFilePath);
@@ -265,7 +206,6 @@ QImage DkThumbNail::computeIntern(const QString& filePath, const QSharedPointer<
 			qWarning() << "Sorry, I could not save the metadata";
 		}
 	}
-
 	//if (!thumb.isNull())
 	//	qInfoClean() << "[thumb] " << fInfo.fileName() << " (" << thumb.width() << " x " << thumb.height() << ") loaded in " << dt << ((exifThumb) ? " from EXIV" : " from File");
 
@@ -361,7 +301,7 @@ bool DkThumbNailT::fetchThumb(int forceLoad /* = false */,  QSharedPointer<QByte
 	if (forceLoad == force_full_thumb || forceLoad == force_save_thumb || forceLoad == save_thumb)
 		mImg = QImage();
 
-	if (!mImg.isNull() || !mImgExists || mFetching)
+	if (!mImg.isNull() || !mImgExists || mFetching || !DkUtils::hasValidSuffix(getFilePath()))
 		return false;
 
 	// we have to do our own bool here
@@ -380,16 +320,15 @@ bool DkThumbNailT::fetchThumb(int forceLoad /* = false */,  QSharedPointer<QByte
 		mFile, 
 		ba, 
 		forceLoad, 
-		mMaxThumbSize, 
-		mMinThumbSize));
+		mMaxThumbSize));
 
 	return true;
 }
 
 
-QImage DkThumbNailT::computeCall(const QString& filePath, QSharedPointer<QByteArray> ba, int forceLoad, int maxThumbSize, int minThumbSize) {
+QImage DkThumbNailT::computeCall(const QString& filePath, QSharedPointer<QByteArray> ba, int forceLoad, int maxThumbSize) {
 
-	QImage thumb = DkThumbNail::computeIntern(filePath, ba, forceLoad, maxThumbSize, minThumbSize);
+	QImage thumb = DkThumbNail::computeIntern(filePath, ba, forceLoad, maxThumbSize);
 	return DkImage::createThumb(thumb);
 }
 
@@ -411,7 +350,7 @@ DkThumbsThreadPool::DkThumbsThreadPool() {
 	
 #if QT_VERSION >= QT_VERSION_CHECK(5, 2, 0)
 	mPool = new QThreadPool();
-	mPool->setMaxThreadCount(qMax(mPool->maxThreadCount()-2, 1));
+	mPool->setMaxThreadCount(qMax(mPool->maxThreadCount() - 2, 1));
 #endif
 }
 

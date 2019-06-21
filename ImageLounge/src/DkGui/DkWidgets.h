@@ -91,16 +91,16 @@ protected:
 	// functions
 	void init();
 
-	void paintEvent(QPaintEvent * event);
-	void focusInEvent(QFocusEvent * event);
-	void focusOutEvent(QFocusEvent * event);
-	void enterEvent(QEvent *event);
-	void leaveEvent(QEvent *event);
+	void paintEvent(QPaintEvent * event) override;
+	void focusInEvent(QFocusEvent * event) override;
+	void focusOutEvent(QFocusEvent * event) override;
+	void enterEvent(QEvent *event) override;
+	void leaveEvent(QEvent *event) override;
 	QPixmap createSelectedEffect(QPixmap* pm);
 
 };
 
-class DkRatingLabel : public DkWidget {
+class DkRatingLabel : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -181,13 +181,13 @@ public:
 	DkRatingLabelBg(int rating = 0, QWidget* parent = 0, Qt::WindowFlags flags = 0);
 	~DkRatingLabelBg();
 
-	void changeRating(int newRating);
+	void changeRating(int newRating) override;
 
 protected:
 	QTimer* mHideTimer;
 	int mTimeToDisplay = 4000;
 	
-	virtual void paintEvent(QPaintEvent *event);
+	virtual void paintEvent(QPaintEvent *event) override;
 };
 
 class DkFileInfoLabel : public DkFadeLabel {
@@ -206,7 +206,7 @@ public:
 	DkRatingLabel* getRatingLabel();
 
 public slots:
-	virtual void setVisible(bool visible, bool saveSettings = true);
+	virtual void setVisible(bool visible, bool saveSettings = true) override;
 
 protected:
 	QString mFilePath;
@@ -219,7 +219,7 @@ protected:
 	void updateWidth();
 };
 
-class DkPlayer : public DkWidget {
+class DkPlayer : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -294,8 +294,8 @@ signals:
 	void visibleSignal(bool visible) const;
 
 protected:
-	void mousePressEvent(QMouseEvent *event);
-	void mouseReleaseEvent(QMouseEvent *event);
+	void mousePressEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
 
 	QColor mBgCol;
 	bool mBlocked = false;
@@ -311,7 +311,7 @@ protected:
 };
 
 // this class is one of the first batch processing classes -> move them to a new file in the (near) future
-class DkThumbsSaver : public DkWidget {
+class DkThumbsSaver : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -378,8 +378,8 @@ signals:
 	void openDir(const QString& dir) const;
 
 protected:
-	void closeEvent(QCloseEvent *event);
-	void contextMenuEvent(QContextMenuEvent* event);
+	void closeEvent(QCloseEvent *event) override;
+	void contextMenuEvent(QContextMenuEvent* event) override;
 
 	void createLayout();
 	void writeSettings();
@@ -430,10 +430,10 @@ protected:
 	QPointF mEnterPos;
 
 	QImage resizedImg(const QImage& src);
-	void paintEvent(QPaintEvent *event);
-	void mouseMoveEvent(QMouseEvent *event);
-	void mouseReleaseEvent(QMouseEvent *event);
-	void mousePressEvent(QMouseEvent *event);
+	void paintEvent(QPaintEvent *event) override;
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void mousePressEvent(QMouseEvent *event) override;
 	QRectF getImageRect() const;
 	QTransform getScaledImageMatrix();
 };
@@ -449,12 +449,12 @@ public:
 	bool isAutoHide() const;
 
 signals:
-	void zoomSignal(float zoomLevel);
+	void zoomSignal(double zoomLevel);
 
 public slots:
 	virtual void setVisible(bool visible, bool autoHide = false);
 
-	void updateZoom(float zoomLevel);
+	void updateZoom(double zoomLevel);
 	void on_sbZoom_valueChanged(double zoomLevel);
 	void on_slZoom_valueChanged(int zoomLevel);
 
@@ -467,7 +467,7 @@ protected:
 	bool mAutoHide = false;
 };
 
-class DkTransformRect : public QWidget {
+class DkTransformRect : public DkWidget {
 	Q_OBJECT
 
 public:
@@ -487,10 +487,10 @@ signals:
 
 protected:
 
-	void mousePressEvent(QMouseEvent *event);
-	void mouseMoveEvent(QMouseEvent *event);
-	void mouseReleaseEvent(QMouseEvent *event);
-	void enterEvent(QEvent *event);
+	void mousePressEvent(QMouseEvent *event) override;
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void enterEvent(QEvent *event) override;
 	void init();
 	
 	DkRotatingRect* rect;
@@ -501,7 +501,7 @@ protected:
 };
 
 
-class DkEditableRect : public DkWidget {
+class DkEditableRect : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -539,7 +539,7 @@ public:
 		mImgRect = imgRect;
 	};
 
-	virtual void setVisible(bool visible);
+	virtual void setVisible(bool visible) override;
 
 signals:
 	void cropImageSignal(const DkRotatingRect& cropArea, const QColor& bgCol = QColor(0,0,0,0), bool cropToMetaData = false) const;
@@ -559,13 +559,13 @@ public slots:
 	void setRect(const QRect& rect);
 
 protected:
-	void mousePressEvent(QMouseEvent *event);
-	void mouseReleaseEvent(QMouseEvent *event);
-	void mouseMoveEvent(QMouseEvent *event);
-	void wheelEvent(QWheelEvent* event);
-	void keyPressEvent(QKeyEvent *event);
-	void keyReleaseEvent(QKeyEvent *event);
-	void paintEvent(QPaintEvent *event);
+	void mousePressEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void wheelEvent(QWheelEvent* event) override;
+	void keyPressEvent(QKeyEvent *event) override;
+	void keyReleaseEvent(QKeyEvent *event) override;
+	void paintEvent(QPaintEvent *event) override;
 	QRect rect() const;
 
 	QPointF clipToImage(const QPointF& pos);
@@ -605,44 +605,20 @@ public:
 
 public slots:
 	void crop(bool cropToMetadata = false);
-	virtual void setVisible(bool visible);
+	virtual void setVisible(bool visible) override;
 
 signals:
 	void hideSignal();
-	void showToolBar(QToolBar* toolbar, bool show);
 
 protected:
 	void createToolbar();
+	void mouseDoubleClickEvent(QMouseEvent* ev) override;
 
 	DkCropToolBar* cropToolbar;
 };
 
-/**
- * DkAnimationLabel
- * This code is based on: http://www.developer.nokia.com/Community/Wiki/CS001434_-_Creating_a_loading_animation_with_GIF,_QMovie,_and_QLabel
- *
- * Uses animation from the path
- * to display it in a DkLabel.
- */
-class DllCoreExport DkAnimationLabel : public DkLabel {
-
-public:
-	DkAnimationLabel(QString animationPath = QString(), QWidget* parent = 0);
-	DkAnimationLabel(QString animationPath, QSize size, QWidget* parent);
-	virtual ~DkAnimationLabel();
-
-	virtual void showTimed(int time = 3000);
-	virtual void hide();
-
-private:
-	QSharedPointer<QSvgRenderer> mSvg;
-
-	void paintEvent(QPaintEvent* ev);
-	void init(const QString& animationPath, const QSize& size);
-};
-
 // Image histogram display
-class DkHistogram : public DkWidget {
+class DkHistogram : public DkFadeWidget {
 
 	Q_OBJECT
 	
@@ -721,7 +697,7 @@ signals:
 	void loadFileSignal(const QString&) const;
 
 protected:
-	void mousePressEvent(QMouseEvent *ev);
+	void mousePressEvent(QMouseEvent *ev) override;
 
 	DkFileInfo fileInfo;
 };
@@ -748,7 +724,7 @@ private:
 	bool showFolderButton = false;
 };
 
-class DkDirectoryChooser : public QWidget {
+class DkDirectoryChooser : public DkWidget {
 	Q_OBJECT
 public:
 	DkDirectoryChooser(const QString& dirPath = "", QWidget* parent = 0);
@@ -861,7 +837,7 @@ class DkListWidget : public QListWidget {
 public:
 	DkListWidget(QWidget* parent);
 
-	void startDrag(Qt::DropActions supportedActions);
+	void startDrag(Qt::DropActions supportedActions) override;
 	bool isEmpty() const;
 
 	void setEmptyText(const QString& text);
@@ -870,8 +846,8 @@ signals:
 	void dataDroppedSignal() const;
 
 protected:
-	void paintEvent(QPaintEvent *event);
-	void dropEvent(QDropEvent *event);
+	void paintEvent(QPaintEvent *event) override;
+	void dropEvent(QDropEvent *event) override;
 
 	QString mEmptyText = tr("Drag Items Here");
 };
@@ -887,7 +863,7 @@ public slots:
 	void setVisibleTimed(bool visible, int time = -1);
 
 protected:
-	void paintEvent(QPaintEvent *ev);
+	void paintEvent(QPaintEvent *ev) override;
 	void initPoints();
 	void animatePoint(double& xVal);
 
@@ -936,8 +912,35 @@ public:
 	DkTabEntryWidget(const QIcon& icon, const QString& text, QWidget* parent);
 
 protected:
-	void paintEvent(QPaintEvent* event);
+	void paintEvent(QPaintEvent* event) override;
 
+};
+
+class DllCoreExport DkDisplayWidget : public DkFadeWidget {
+	Q_OBJECT
+
+public:
+	DkDisplayWidget(QWidget* parent);
+
+	QRect screenRect() const;
+	
+	int count() const;
+
+	int currentIndex() const;
+	void setCurrentIndex(int index);
+
+//public slots:
+//	void changeDisplay();
+
+protected:
+	void resizeEvent(QResizeEvent *event) override;
+
+private:
+	void createLayout();
+	void updateLayout();
+
+	QList<QScreen*> mScreens;
+	QList<QPushButton*> mScreenButtons;
 };
 
 }

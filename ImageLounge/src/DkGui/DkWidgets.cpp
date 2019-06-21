@@ -95,6 +95,9 @@
 #include <QSvgRenderer>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QButtonGroup>
+#include <QDesktopWidget>
+#include <QScreen>
 #pragma warning(pop)		// no warnings from includes - end
 
 namespace nmc {
@@ -110,7 +113,7 @@ DkFolderScrollBar::DkFolderScrollBar(QWidget* parent) : QSlider(Qt::Horizontal, 
 DkFolderScrollBar::~DkFolderScrollBar() {
 }
 
-// DkWidget stuff
+// DkFadeWidget stuff
 void DkFolderScrollBar::registerAction(QAction* action) {
 	connect(this, SIGNAL(visibleSignal(bool)), action, SLOT(setChecked(bool)));
 }
@@ -199,7 +202,7 @@ void DkFolderScrollBar::init() {
 
 void DkFolderScrollBar::show(bool saveSettings) {
 
-	// here is a strange problem if you add a DkWidget to another DkWidget -> painters crash
+	// here is a strange problem if you add a DkFadeWidget to another DkFadeWidget -> painters crash
 	if (!mBlocked && !mShowing) {
 		mHiding = false;
 		mShowing = true;
@@ -276,7 +279,7 @@ void DkFolderScrollBar::animateOpacityDown() {
 }
 
 // DkThumbsSaver --------------------------------------------------------------------
-DkThumbsSaver::DkThumbsSaver(QWidget* parent) : DkWidget(parent) {
+DkThumbsSaver::DkThumbsSaver(QWidget* parent) : DkFadeWidget(parent) {
 	mStop = false;
 	mNumSaved = 0;
 }
@@ -819,23 +822,23 @@ void DkZoomWidget::createLayout() {
 void DkZoomWidget::on_sbZoom_valueChanged(double zoomLevel) {
 	updateZoom((float)zoomLevel);
 	mAutoHide = false;
-	emit zoomSignal((float)zoomLevel/100.0f);
+	emit zoomSignal(zoomLevel/100.0);
 }
 
 void DkZoomWidget::on_slZoom_valueChanged(int zoomLevel) {
-	float level = (zoomLevel > 50) ? (zoomLevel-50.0f)/50.0f * (float)mSbZoom->maximum() + 200.0f : zoomLevel*4.0f;
-	if (level < 0.2f) level = 0.2f;
+	double level = (zoomLevel > 50) ? (zoomLevel-50.0)/50.0 * mSbZoom->maximum() + 200.0 : zoomLevel*4.0;
+	if (level < 0.2) level = 0.2;
 	mAutoHide = false;
 	updateZoom(level);
-	emit zoomSignal(level/100.0f);
+	emit zoomSignal(level/100.0);
 }
 
-void DkZoomWidget::updateZoom(float zoomLevel) {
+void DkZoomWidget::updateZoom(double zoomLevel) {
 
 	mSlZoom->blockSignals(true);
 	mSbZoom->blockSignals(true);
 	
-	int slVal = (zoomLevel > 200.0f) ? qRound(zoomLevel/mSbZoom->maximum()*50.0f + 50.0f) : qRound(zoomLevel*0.25f);
+	int slVal = (zoomLevel > 200.0) ? qRound(zoomLevel/mSbZoom->maximum()*50.0 + 50.0) : qRound(zoomLevel*0.25);
 	mSlZoom->setValue(slVal);
 	mSbZoom->setValue(zoomLevel);
 	mSlZoom->blockSignals(false);
@@ -970,7 +973,7 @@ void DkButton::leaveEvent(QEvent*) {
 }
 
 // star label --------------------------------------------------------------------
-DkRatingLabel::DkRatingLabel(int rating, QWidget* parent, Qt::WindowFlags flags) : DkWidget(parent, flags) {
+DkRatingLabel::DkRatingLabel(int rating, QWidget* parent, Qt::WindowFlags flags) : DkFadeWidget(parent, flags) {
 
 	setObjectName("DkRatingLabel");
 	mRating = rating;
@@ -993,8 +996,8 @@ DkRatingLabel::DkRatingLabel(int rating, QWidget* parent, Qt::WindowFlags flags)
 
 void DkRatingLabel::init() {
 
-	QPixmap starDark = QPixmap(":/nomacs/img/star-dark.png");
-	QPixmap starWhite = QPixmap(":/nomacs/img/star-white.png");
+	QIcon starDark = DkImage::loadIcon(":/nomacs/img/star-off.svg", QSize(), DkSettingsManager::param().display().hudFgdColor);
+	QIcon starWhite = DkImage::loadIcon(":/nomacs/img/star-on.svg", QSize(), DkSettingsManager::param().display().hudFgdColor);
 
 	mStars.resize(5);
 	
@@ -1137,7 +1140,6 @@ void DkFileInfoLabel::setVisible(bool visible, bool saveSettings) {
 	if (mRatingLabel->isVisible())
 		height += mRatingLabel->sizeHint().height();
 
-	qDebug() << "my minimum height: " << height;
 	setMinimumHeight(height);
 	updateWidth();
 }
@@ -1202,7 +1204,7 @@ void DkFileInfoLabel::updateWidth() {
 }
 
 // player --------------------------------------------------------------------
-DkPlayer::DkPlayer(QWidget* parent) : DkWidget(parent) {
+DkPlayer::DkPlayer(QWidget* parent) : DkFadeWidget(parent) {
 
 	init();
 	createLayout();
@@ -1211,23 +1213,24 @@ DkPlayer::DkPlayer(QWidget* parent) : DkWidget(parent) {
 void DkPlayer::createLayout() {
 
 	int height = 50;
+	QSize ih(height-12, height-12);
 
-	previousButton = new QPushButton(QIcon(":/nomacs/img/player-previous.svg"), "", this);
+	previousButton = new QPushButton(DkImage::loadIcon(":/nomacs/img/previous.svg", ih, Qt::white), "", this);
 	//previousButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-	previousButton->setIconSize(QSize(2*height, height));
-	previousButton->setMaximumHeight(height);
+	previousButton->setIconSize(ih);
+	previousButton->setMinimumSize(QSize(qRound(1.5*height), height));
 	previousButton->setToolTip(tr("Show previous image"));
 	previousButton->setObjectName("DkPlayerButton");
 	previousButton->setFlat(true);
 	connect(previousButton, SIGNAL(pressed()), this, SLOT(previous()));
 
 	QIcon icon;
-	icon.addPixmap(QIcon(":/nomacs/img/player-pause.svg").pixmap(2*height), QIcon::Normal, QIcon::On);
-	icon.addPixmap(QIcon(":/nomacs/img/player-play.svg").pixmap(2*height), QIcon::Normal, QIcon::Off);
+	icon.addPixmap(DkImage::loadIcon(":/nomacs/img/pause.svg", ih, Qt::white), QIcon::Normal, QIcon::On);
+	icon.addPixmap(DkImage::loadIcon(":/nomacs/img/play.svg", ih, Qt::white), QIcon::Normal, QIcon::Off);
 	playButton = new QPushButton(icon, "", this);
 	//playButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-	playButton->setIconSize(QSize(2*height, height));
-	playButton->setMaximumHeight(height);
+	playButton->setIconSize(ih);
+	playButton->setMinimumSize(QSize(qRound(1.5*height), height));
 	playButton->setToolTip(tr("Play/Pause"));
 	playButton->setObjectName("DkPlayerButton");
 	playButton->setFlat(true);
@@ -1236,10 +1239,10 @@ void DkPlayer::createLayout() {
 	playButton->addAction(DkActionManager::instance().action(DkActionManager::menu_view_slideshow));
 	connect(playButton, SIGNAL(clicked(bool)), this, SLOT(play(bool)));
 
-	nextButton = new QPushButton(QIcon(":/nomacs/img/player-next.svg"), "",  this);
+	nextButton = new QPushButton(DkImage::loadIcon(":/nomacs/img/next.svg", ih, Qt::white), "",  this);
 	//nextButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-	nextButton->setIconSize(QSize(2*height, height));
-	nextButton->setMaximumHeight(height);
+	nextButton->setIconSize(ih);
+	nextButton->setMinimumSize(QSize(qRound(1.5*height), height));
 	nextButton->setToolTip(tr("Show next image"));
 	nextButton->setObjectName("DkPlayerButton");
 	nextButton->setFlat(true);
@@ -1248,7 +1251,7 @@ void DkPlayer::createLayout() {
 	// now add to mLayout
 	container = new QWidget(this);
 	QHBoxLayout* layout = new QHBoxLayout(container);
-	layout->setContentsMargins(0,0,0,0);
+	//layout->setContentsMargins(0,0,0,0);
 	layout->addStretch();
 	layout->addWidget(previousButton);
 	layout->addWidget(playButton);
@@ -1347,7 +1350,7 @@ void DkPlayer::show(int ms) {
 
 	bool showPlayer = getCurrentDisplaySetting();
 
-	DkWidget::show();
+	DkFadeWidget::show();
 
 	// automatic showing, don't store it in the display bits
 	if (ms > 0 && mDisplaySettingsBits && mDisplaySettingsBits->size() > DkSettingsManager::param().app().currentAppMode) {
@@ -1356,7 +1359,7 @@ void DkPlayer::show(int ms) {
 }
  
 // DkTransformRectangle --------------------------------------------------------------------
-DkTransformRect::DkTransformRect(int idx, DkRotatingRect* rect, QWidget* parent, Qt::WindowFlags f) : QWidget(parent, f) {
+DkTransformRect::DkTransformRect(int idx, DkRotatingRect* rect, QWidget* parent, Qt::WindowFlags f) : DkWidget(parent, f) {
 
 	this->parentIdx = idx;
 	this->size = QSize(12, 12);
@@ -1435,10 +1438,10 @@ void DkTransformRect::enterEvent(QEvent*) {
 }
 
 // DkEditableRectangle --------------------------------------------------------------------
-DkEditableRect::DkEditableRect(const QRectF& rect, QWidget* parent, Qt::WindowFlags f) : DkWidget(parent, f) {
+DkEditableRect::DkEditableRect(const QRectF& rect, QWidget* parent, Qt::WindowFlags f) : DkFadeWidget(parent, f) {
 
 	mRect = rect;
-	mRotatingCursor = QCursor(QPixmap(":/nomacs/img/rotating-cursor.png"));
+	mRotatingCursor = QCursor(DkImage::loadFromSvg(":/nomacs/img/rotating-cursor.svg", QSize(24, 24)));
 	
 	setAttribute(Qt::WA_MouseTracking);
 
@@ -1817,7 +1820,7 @@ void DkEditableRect::mouseMoveEvent(QMouseEvent *event) {
 		setAngle(angle, false);
 	}
 
-	if (event->buttons() == Qt::LeftButton && mState != moving) {
+	if (event->buttons() == Qt::LeftButton) {
 
 		QPolygonF p = mRect.getPoly();
 
@@ -1830,11 +1833,11 @@ void DkEditableRect::mouseMoveEvent(QMouseEvent *event) {
 		QPoint tl;
 
 		if (sAngle == 0.0f || fabs(sAngle) == 90.0f) {
-			tl = mRect.getTopLeft().toPoint();
+			tl = mRtform.map(mRect.getTopLeft()).toPoint();
 			info += "x: ";
 		}
 		else {
-			tl = mRect.getCenter().toPoint();
+			tl = mRtform.map(mRect.getCenter()).toPoint();
 			info += "center x: ";
 		}
 		info += QString::number(tl.x()) + ", y: ";
@@ -1970,7 +1973,7 @@ void DkEditableRect::setVisible(bool visible) {
 		setCursor(Qt::CrossCursor);
 	}
 
-	DkWidget::setVisible(visible);
+	DkFadeWidget::setVisible(visible);
 }
 
 // DkEditableRect --------------------------------------------------------------------
@@ -1996,9 +1999,15 @@ void DkCropWidget::createToolbar() {
 	connect(this, SIGNAL(angleSignal(double)), cropToolbar, SLOT(angleChanged(double)));
 	connect(this, SIGNAL(aRatioSignal(const QPointF&)), cropToolbar, SLOT(setAspectRatio(const QPointF&)));
 	connect(this, SIGNAL(updateRectSignal(const QRect&)), cropToolbar, SLOT(setRect(const QRect&)));
-
+	
 	cropToolbar->loadSettings();	// need to this manually after connecting the slots
 
+}
+
+void DkCropWidget::mouseDoubleClickEvent(QMouseEvent * ev) {
+	
+	crop();
+	QWidget::mouseDoubleClickEvent(ev);
 }
 
 DkCropToolBar* DkCropWidget::getToolbar() const {
@@ -2023,63 +2032,12 @@ void DkCropWidget::setVisible(bool visible) {
 	if (visible && !cropToolbar)
 		createToolbar();
 
-	emit showToolBar(cropToolbar, visible);
+	DkToolBarManager::inst().showToolBar(cropToolbar, visible);
 	DkEditableRect::setVisible(visible);
 }
 
-
-// DkAnimagionLabel --------------------------------------------------------------------
-DkAnimationLabel::DkAnimationLabel(QString animationPath, QWidget* parent) : DkLabel(parent) {
-
-	init(animationPath, QSize());
-}
-
-DkAnimationLabel::DkAnimationLabel(QString animationPath, QSize size, QWidget* parent) : DkLabel(parent) {
-
-	init(animationPath, size);
-}
-
-DkAnimationLabel::~DkAnimationLabel() {
-}
-
-void DkAnimationLabel::init(const QString& animationPath, const QSize& size) {
-	
-	setObjectName("DkAnimationLabel");
-
-	mSvg = QSharedPointer<QSvgRenderer>(new QSvgRenderer(animationPath));
-	connect(mSvg.data(), SIGNAL(repaintNeeded()), this, SLOT(update()));
-
-	QSize s = size;
-	if(s.isEmpty())
-		s = mSvg->defaultSize();
-
-	setFixedSize(s);
-	hide();
-}
-
-void DkAnimationLabel::showTimed(int time) {
-	
-	DkLabel::showTimed(time);
-}
-
-
-void DkAnimationLabel::hide() {
-	
-	DkLabel::hide();
-}
-
-void DkAnimationLabel::paintEvent(QPaintEvent* ev) {
-	
-	if (mSvg) {
-		QPainter p(this);
-		mSvg->render(&p, QRect(QPoint(), size()));
-	}
-
-	DkLabel::paintEvent(ev);
-}
-
 // Image histogram  -------------------------------------------------------------------
-DkHistogram::DkHistogram(QWidget *parent) : DkWidget(parent){
+DkHistogram::DkHistogram(QWidget *parent) : DkFadeWidget(parent){
 	
 	setObjectName("DkHistogram");
 	setMinimumWidth(265);
@@ -2190,7 +2148,7 @@ void DkHistogram::contextMenuEvent(QContextMenuEvent * event) {
 	event->accept();
 
 	// do not pass it on
-	//DkWidget::contextMenuEvent(event);
+	//DkFadeWidget::contextMenuEvent(event);
 }
 
 void DkHistogram::on_toggleStats_triggered(bool show) {
@@ -2376,7 +2334,7 @@ void DkHistogram::mousePressEvent(QMouseEvent *event) {
 
 	// always propagate mouse events
 	if (event->buttons() != Qt::LeftButton)
-		DkWidget::mousePressEvent(event);
+		DkFadeWidget::mousePressEvent(event);
 }
 
 void DkHistogram::mouseMoveEvent(QMouseEvent *event) {
@@ -2391,7 +2349,7 @@ void DkHistogram::mouseMoveEvent(QMouseEvent *event) {
 		}
 	}
 	else
-		DkWidget::mouseMoveEvent(event);
+		DkFadeWidget::mouseMoveEvent(event);
 
 }
 
@@ -2401,7 +2359,7 @@ void DkHistogram::mouseReleaseEvent(QMouseEvent *event) {
 	update();
 
 	if (event->buttons() != Qt::LeftButton)
-		DkWidget::mouseReleaseEvent(event);
+		DkFadeWidget::mouseReleaseEvent(event);
 }
 
 // DkFileInfo --------------------------------------------------------------------
@@ -2503,7 +2461,7 @@ bool DkDirectoryEdit::existsDirectory(const QString& path) {
 }
 
 // DkDirectoryChooser --------------------------------------------------------------------
-DkDirectoryChooser::DkDirectoryChooser(const QString& dirPath, QWidget* parent) : QWidget(parent) {
+DkDirectoryChooser::DkDirectoryChooser(const QString& dirPath, QWidget* parent) : DkWidget(parent) {
 	
 	createLayout(dirPath);
 	QMetaObject::connectSlotsByName(this);
@@ -2646,7 +2604,7 @@ void DkProgressBar::paintEvent(QPaintEvent *) {
 	p.setPen(Qt::NoPen);
 
 	if (parentWidget() && DkUtils::getMainWindow()->isFullScreen())
-		p.fillRect(QRect(QPoint(), size()), DkSettingsManager::param().slideShow().backgroundColor);
+		p.setBackground(DkSettingsManager::param().slideShow().backgroundColor);
 
 	p.setBrush(DkSettingsManager::param().display().highlightColor);
 
@@ -2908,5 +2866,120 @@ void DkTabEntryWidget::paintEvent(QPaintEvent *event) {
 
 	QPushButton::paintEvent(event);
 }
+
+// -------------------------------------------------------------------- DkDisplayWidget 
+DkDisplayWidget::DkDisplayWidget(QWidget* parent) : DkFadeWidget(parent) {
+
+	createLayout();
+	updateLayout();
+
+	setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
+	setMinimumHeight(100);
+}
+
+QRect DkDisplayWidget::screenRect() const {
+	
+	int idx = currentIndex();
+
+	if (idx >= 0)
+		return mScreens[idx]->availableGeometry();
+
+	return QRect();
+}
+
+int DkDisplayWidget::count() const {
+	
+	return mScreens.size();
+}
+
+int DkDisplayWidget::currentIndex() const {
+	
+	for (int idx = 0; idx < mScreenButtons.size(); idx++) {
+
+		if (mScreenButtons[idx]->isChecked())
+			return idx;
+	}
+	
+	return 0;
+}
+
+void DkDisplayWidget::setCurrentIndex(int index) {
+
+	mScreenButtons[index]->setChecked(true);
+}
+
+void DkDisplayWidget::resizeEvent(QResizeEvent * event) {
+
+	DkFadeWidget::resizeEvent(event);
+	updateLayout();
+}
+
+void DkDisplayWidget::createLayout() {
+
+	mScreens = QGuiApplication::screens();
+
+	QButtonGroup* bg = new QButtonGroup(this);
+
+	for (int idx = 0; idx < mScreens.size(); idx++) {
+
+		QPushButton* sb = new QPushButton(QString::number(idx+1), this);
+		sb->setObjectName("displayButton");
+		sb->setCheckable(true);
+		sb->setFlat(true);
+
+		//connect(sb, SIGNAL(clicked()), this, SLOT(changeDisplay()));
+
+		bg->addButton(sb);
+		mScreenButtons << sb;
+	}
+}
+
+void DkDisplayWidget::updateLayout() {
+
+
+	QRect desktop;
+	for (auto s : mScreens) {
+		desktop = desktop.united(s->geometry());
+	}
+
+	int w = width() - 6;
+	int h = height() - 6;
+
+	QTransform tm;
+	double sx = (double)w / desktop.width();
+	double sy = (double)h / desktop.height();
+	double s = qMin(sx, sy);
+	tm.scale(s, s);
+
+	QRect md = tm.mapRect(desktop);
+	QPoint dxy(qRound((width() - md.width()) * 0.5), qRound((height() - md.height()) * 0.5));
+
+	int myScreen = QApplication::desktop()->screenNumber(this);
+
+	for (int idx = 0; idx < mScreens.size(); idx++) {
+
+		QRect r = mScreens[idx]->geometry();
+		r.moveCenter(r.center()-desktop.topLeft());
+		
+		r = tm.mapRect(r);
+		r.moveCenter(r.center()+dxy);	// center
+
+		if (idx == myScreen)
+			mScreenButtons[idx]->setChecked(true);
+
+		mScreenButtons[idx]->setGeometry(r);
+	}
+}
+
+//void DkDisplayWidget::changeDisplay() {
+//
+//	QRect sr = screenRect();
+//
+//	DkNoMacsFrameless* w = dynamic_cast<DkNoMacsFrameless*>(DkUtils::getMainWindow());
+//
+//	if (w)
+//		w->setGeometry(sr);
+//}
+
 
 }

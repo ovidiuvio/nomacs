@@ -57,6 +57,7 @@ if(ENABLE_OPENCV)
 endif(ENABLE_OPENCV)
 
 # search for libraw
+unset(LIBRAW_FOUND CACHE)
 if(ENABLE_RAW)
 	if(NOT OpenCV_FOUND)
 		message(FATAL_ERROR "OpenCV is mandotory when enabling RAW. You have to enable ENABLE_OPENCV")
@@ -103,7 +104,7 @@ if(ENABLE_QUAZIP)
   if(USE_SYSTEM_QUAZIP)
     SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-    find_package(QuaZIP REQUIRED)
+    find_package(QuaZip5 QUIET)
     if(NOT QUAZIP_FOUND)
 	    message(FATAL_ERROR "QUAZIP not found. It's mandatory when used with ENABLE_QUAZIP enabled, you can also disable USE_SYSTEM_QUAZIP")
     else()
@@ -122,9 +123,9 @@ endif(ENABLE_QUAZIP)
 
 # add libqpsd
 IF(USE_SYSTEM_LIBQPSD)
-	find_package(qpsd REQUIRED)
+	find_package(qpsd QUIET)
 	if(NOT QPSD_FOUND)
-		message(FATAL_ERROR "QUAZIP not found. It's mandatory when used with ENABLE_QUAZIP enabled, you can also disable USE_SYSTEM_QUAZIP")
+		message(FATAL_ERROR "QPSD not found. It's mandatory when used with USE_SYSTEM_LIBQPSD enabled, you can also disable USE_SYSTEM_LIBQPSD")
 	endif()
 ELSE()
 	file(GLOB LIBQPSD_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libqpsd/*.cpp")

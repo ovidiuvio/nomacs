@@ -160,8 +160,9 @@ public:
 
 	QStringList getFileList() const;
 	void appendDir(const QString& newDir, bool recursive = false);
-	void insertFromMimeData(const QMimeData *src);
+	void insertFromMimeData(const QMimeData *src) override;
 	void clear();
+	QString firstDirPath() const;
 
 signals:
 	void fileListChangedSignal() const;
@@ -170,15 +171,15 @@ public slots:
 	void appendFiles(const QStringList& fileList);
 
 protected:
-	void dropEvent(QDropEvent *event);
-	void dragEnterEvent(QDragEnterEvent *event);
-	void dragMoveEvent(QDragMoveEvent *event);
+	void dropEvent(QDropEvent *event) override;
+	void dragEnterEvent(QDragEnterEvent *event) override;
+	void dragMoveEvent(QDragMoveEvent *event) override;
 	void appendFromMime(const QMimeData* mimeData, bool recursive = false);
 
 	QList<int> mResultList;
 };
 
-class DkBatchInput : public QWidget, public DkBatchContent  {
+class DkBatchInput : public DkWidget, public DkBatchContent  {
 	Q_OBJECT
 
 public:
@@ -198,9 +199,9 @@ public:
 	QStringList getSelectedFilesBatch();
 	DkInputTextEdit* getInputEdit() const;
 
-	virtual bool hasUserInput() const {return mHUserInput;};
-	virtual bool requiresUserInput() const {return mRUserInput;};
-	virtual void applyDefault();
+	virtual bool hasUserInput() const override {return mHUserInput;};
+	virtual bool requiresUserInput() const override {return mRUserInput;};
+	virtual void applyDefault() override;
 
 	void changeTab(int tabIdx) const;
 	void startProcessing();
@@ -211,7 +212,7 @@ public slots:
 	void setDir(const QString& dirPath);
 	void browse();
 	void updateDir(QVector<QSharedPointer<DkImageContainerT> >);
-	void setVisible(bool visible);
+	void setVisible(bool visible) override;
 	void parameterChanged();
 	void selectionChanged();
 	void setFileInfo(QFileInfo file);
@@ -241,7 +242,7 @@ private:
 
 };
 
-class DkFilenameWidget : public QWidget {
+class DkFilenameWidget : public DkWidget {
 	Q_OBJECT
 
 public:	
@@ -286,15 +287,15 @@ private:
 	bool hasChanged = false;
 };
 
-class DkBatchOutput : public QWidget, public DkBatchContent {
+class DkBatchOutput : public DkWidget, public DkBatchContent {
 Q_OBJECT
 
 public:
 	DkBatchOutput(QWidget* parent = 0, Qt::WindowFlags f = 0);
 
-	virtual bool hasUserInput() const;
-	virtual bool requiresUserInput() const {return mRUserInput;};
-	void applyDefault();
+	virtual bool hasUserInput() const override;
+	virtual bool requiresUserInput() const override {return mRUserInput;};
+	void applyDefault() override;
 	void loadProperties(const DkBatchConfig& config);
 
 	DkSaveInfo::OverwriteMode overwriteMode() const;
@@ -345,14 +346,14 @@ private:
 
 	QComboBox* mCbExtension = 0;
 	QComboBox* mCbNewExtension = 0;
-	QSpinBox* mSbCompression = 0;
+	QComboBox* mCbCompression = 0;
 	QLabel* mOldFileNameLabel = 0;
 	QLabel* mNewFileNameLabel = 0;
 	QString mExampleName = 0;
 
 };
 
-class DkProfileSummaryWidget : public DkWidget {
+class DkProfileSummaryWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -379,16 +380,16 @@ protected:
 	QLabel* mFunctions = 0;
 };
 
-class DkProfileWidget : public QWidget, public DkBatchContent {
+class DkProfileWidget : public DkWidget, public DkBatchContent {
 	Q_OBJECT
 
 public:
 	DkProfileWidget(QWidget* parent = 0, Qt::WindowFlags f = 0);
 
 	//void transferProperties(QSharedPointer<DkResizeBatch> batchResize) const;
-	bool hasUserInput() const;
-	bool requiresUserInput() const;
-	void applyDefault();
+	bool hasUserInput() const override;
+	bool requiresUserInput() const override;
+	void applyDefault() override;
 	void profileSaved(const QString& profileName);
 
 public slots:
@@ -420,7 +421,7 @@ protected:
 
 
 #ifdef WITH_PLUGINS
-class DkBatchPluginWidget : public QWidget, public DkBatchContent {
+class DkBatchPluginWidget : public DkWidget, public DkBatchContent {
 	Q_OBJECT
 
 public:
@@ -428,9 +429,9 @@ public:
 
 	void transferProperties(QSharedPointer<DkPluginBatch> batchPlugin) const;
 	bool loadProperties(QSharedPointer<DkPluginBatch> batchPlugin);
-	bool hasUserInput() const;
-	bool requiresUserInput() const;
-	void applyDefault();
+	bool hasUserInput() const override;
+	bool requiresUserInput() const override;
+	void applyDefault() override;
 	void setSettingsPath(const QString& settingsPath);
 
 public slots:
@@ -461,7 +462,7 @@ protected:
 };
 #endif
 
-class DkBatchManipulatorWidget : public QWidget, public DkBatchContent {
+class DkBatchManipulatorWidget : public DkWidget, public DkBatchContent {
 	Q_OBJECT
 
 public:
@@ -469,9 +470,9 @@ public:
 
 	void transferProperties(QSharedPointer<DkManipulatorBatch> batchPlugin) const;
 	bool loadProperties(QSharedPointer<DkManipulatorBatch> batchPlugin);
-	bool hasUserInput() const;
-	bool requiresUserInput() const;
-	void applyDefault();
+	bool hasUserInput() const override;
+	bool requiresUserInput() const override;
+	void applyDefault() override;
 	void setExampleFile(const QString& filePath);
 
 public slots:
@@ -502,7 +503,7 @@ protected:
 	int mMaxPreview = 300;
 };
 
-class DkBatchTransformWidget : public QWidget, public DkBatchContent {
+class DkBatchTransformWidget : public DkWidget, public DkBatchContent {
 	Q_OBJECT
 
 public:
@@ -510,9 +511,9 @@ public:
 
 	void transferProperties(QSharedPointer<DkBatchTransform> batchTransform) const;
 	bool loadProperties(QSharedPointer<DkBatchTransform> batchTransform);
-	bool hasUserInput() const;
-	bool requiresUserInput() const;
-	void applyDefault();
+	bool hasUserInput() const override;
+	bool requiresUserInput() const override;
+	void applyDefault() override;
 
 public slots:
 	void updateHeader() const;
@@ -544,7 +545,7 @@ protected:
 
 };
 
-class DkBatchButtonsWidget : public DkWidget {
+class DkBatchButtonsWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -565,7 +566,7 @@ protected:
 	QPushButton* mLogButton = 0;
 };
 
-class DkBatchInfoWidget : public DkWidget {
+class DkBatchInfoWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -589,7 +590,7 @@ protected:
 	QLabel* mIcon = 0;
 };
 
-class DkBatchWidget : public DkWidget {
+class DkBatchWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:

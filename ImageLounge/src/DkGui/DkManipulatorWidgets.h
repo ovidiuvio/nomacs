@@ -52,7 +52,7 @@ namespace nmc {
 
 // nomacs defines
 
-class DkBaseManipulatorWidget : public DkWidget {
+class DkBaseManipulatorWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -114,6 +114,27 @@ private:
 
 };
 
+class DkResizeWidget : public DkBaseManipulatorWidget {
+	Q_OBJECT
+
+public:
+	DkResizeWidget(QSharedPointer<DkBaseManipulatorExt> manipulator, QWidget* parent = 0);
+
+	QSharedPointer<DkResizeManipulator> manipulator() const;
+
+public slots:
+	void on_scaleFactorSlider_valueChanged(double val);
+	void on_iplBox_currentIndexChanged(int idx);
+	void on_gammaCorrection_toggled(bool checked);
+	void onObjectNameChanged(const QString& name);
+
+private:
+	void createLayout();
+
+	QComboBox* mIplBox;
+
+};
+
 class DkThresholdWidget : public DkBaseManipulatorWidget {
 	Q_OBJECT
 
@@ -148,6 +169,21 @@ private:
 	void createLayout();
 };
 
+class DkColorWidget : public DkBaseManipulatorWidget {
+	Q_OBJECT
+
+public:
+	DkColorWidget(QSharedPointer<DkBaseManipulatorExt> manipulator, QWidget* parent = 0);
+
+	QSharedPointer<DkColorManipulator> manipulator() const;
+
+public slots:
+	void on_colPicker_colorSelected(const QColor& col);
+
+private:
+	void createLayout();
+};
+
 class DkExposureWidget : public DkBaseManipulatorWidget {
 	Q_OBJECT
 
@@ -166,7 +202,7 @@ private:
 };
 
 // dock --------------------------------------------------------------------
-class DkManipulatorWidget : public DkWidget {
+class DkManipulatorWidget : public DkFadeWidget {
 	Q_OBJECT
 
 public:
@@ -186,7 +222,7 @@ private:
 	QSharedPointer<DkImageContainerT> mImgC;
 	QLabel* mPreview = 0;
 	QLabel* mTitleLabel = 0;
-	int mMaxPreview = 300;
+	int mMaxPreview = 150;
 };
 
 class DkEditDock : public DkDockWidget {
@@ -200,9 +236,6 @@ public slots:
 
 protected:
 	void createLayout();
-
-	//void writeSettings();
-	//void readSettings();
 
 	DkManipulatorWidget* mMplWidget = 0;
 

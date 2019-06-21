@@ -28,6 +28,7 @@
 #pragma once
 
 #include "DkManipulators.h"
+#include "DkBaseWidgets.h"
 
 #pragma warning(push, 0)	// no warnings from includes - begin
 #include <QObject>
@@ -55,7 +56,6 @@ class QProgressDialog;
 namespace nmc {
 	
 // nomacs defines
-class DkManagerThread;
 class DkTcpMenu;
 class DkPluginActionManager;
 
@@ -120,6 +120,7 @@ public:
 		menu_file_app_manager,
 		menu_file_save,
 		menu_file_save_as,
+		menu_file_save_copy,
 		menu_file_save_list,
 		menu_file_save_web,
 		menu_file_rename,
@@ -203,6 +204,7 @@ public:
 		menu_panel_metadata_dock,
 		menu_panel_comment,
 		menu_panel_history,
+		menu_panel_log,
 
 		menu_panel_end,
 	};
@@ -238,11 +240,13 @@ public:
 		menu_view_movie_next,
 		menu_view_movie_prev,
 
+		menu_view_monitors,	// frameless only
+
 		menu_view_end,	// nothing beyond this point
 	};
 
 	enum SyncMenuActions {
-		menu_sync,
+		menu_sync_view,
 		menu_sync_pos,
 		menu_sync_arrange,
 		menu_sync_connect_all,
@@ -324,6 +328,7 @@ public:
 		icon_file_save,
 		icon_file_print,
 		icon_file_filter,
+		icon_file_find,
 
 		icon_file_end,	// nothing beyond this point
 	};
@@ -414,6 +419,7 @@ public:
 		shortcut_show_explorer	= Qt::Key_E,
 		shortcut_show_metadata_dock = Qt::ALT + Qt::Key_M,
 		shortcut_show_history	= Qt::CTRL + Qt::SHIFT + Qt::Key_H,
+		shortcut_show_log		= Qt::CTRL + Qt::ALT + Qt::Key_L,
 		shortcut_view_slideshow	= Qt::Key_Space,
 		shortcut_show_player	= Qt::Key_P,
 		shortcut_show_exif		= Qt::Key_M,
@@ -496,8 +502,6 @@ public:
 	void createActions(QWidget* parent);
 	void createMenus(QWidget* parent);
 	
-	void addSyncMenu(QMenu* syncMenu, DkTcpMenu* localMenu);
-
 	QAction* action(FileMenuActions action) const;
 	QAction* action(SortMenuActions action) const;
 	QAction* action(ViewMenuActions action) const;
@@ -535,6 +539,9 @@ public:
 
 	void assignCustomShortcuts(QVector<QAction*> actions) const;
 
+	void enableImageActions(bool enable = true) const;
+	void enableMovieActions(bool enable = true) const;
+
 protected:
 	DkActionManager();
 	
@@ -551,6 +558,7 @@ protected:
 	QMenu* createPanelMenu(QWidget* parent);
 	QMenu* createHelpMenu(QWidget* parent);
 	QMenu* createContextMenu(QWidget* parent);
+	QMenu* createSyncMenu(QWidget* parent);
 
 	// actions
 	QVector<QAction *> mFileActions;
@@ -583,7 +591,7 @@ protected:
 	// sync
 	QMenu* mSyncMenu = 0;
 	DkTcpMenu* mLocalMenu = 0;
-
+	   
 	// icons
 	QVector<QIcon> mFileIcons;
 	QVector<QIcon> mEditIcons;
@@ -596,7 +604,7 @@ protected:
 	QSharedPointer<DkActionManager> inst;
 };
 
-class DllCoreExport DkGlobalProgress : public QWidget {
+class DllCoreExport DkGlobalProgress : public DkWidget {
 	Q_OBJECT
 
 public:

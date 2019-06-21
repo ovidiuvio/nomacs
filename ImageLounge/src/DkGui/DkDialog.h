@@ -57,6 +57,7 @@ class QLabel;
 class QComboBox;
 class QCheckBox;
 class QProgressBar;
+class QSettings;
 
 namespace nmc {
 
@@ -67,6 +68,8 @@ class DkSlider;
 class DkButton;
 class DkThumbNail;
 class DkAppManager;
+class DkDisplayWidget;
+class DkCentralWidget;
 
 // needed because of http://stackoverflow.com/questions/1891744/pyqt4-qspinbox-selectall-not-working-as-expected 
 // and http://qt-project.org/forums/viewthread/8590
@@ -109,9 +112,9 @@ public:
 	~DkSplashScreen() {};
 
 protected:
-	void mouseMoveEvent(QMouseEvent *event);
-	void mousePressEvent(QMouseEvent *event);
-	void mouseReleaseEvent(QMouseEvent *event);
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void mousePressEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
 	void showClose();
 
 private:
@@ -159,11 +162,11 @@ public slots:
 	void textChanged(const QString& text);
 	void loadFile(const QString& filePath = "");
 	void openFile();
-	void accept();
+	void accept() override;
 
 protected:
-	void dragEnterEvent(QDragEnterEvent *event);
-	void dropEvent(QDropEvent *event);
+	void dragEnterEvent(QDragEnterEvent *event) override;
+	void dropEvent(QDropEvent *event) override;
 
 	void createLayout();
 	void userFeedback(const QString& msg, bool error = false);
@@ -188,7 +191,7 @@ public slots:
 	void on_addButton_clicked();
 	void on_deleteButton_clicked();
 	void on_runButton_clicked();
-	virtual void accept();
+	virtual void accept() override;
 
 signals:
 	void openWithSignal(QAction* act);
@@ -227,7 +230,7 @@ public slots:
 	void on_filterButton_pressed();
 	void on_resultListView_doubleClicked(const QModelIndex& modelIndex);
 	void on_resultListView_clicked(const QModelIndex& modelIndex);
-	virtual void accept();
+	virtual void accept() override;
 
 signals:
 	void loadFileSignal(const QString& filePath) const;
@@ -297,7 +300,7 @@ protected slots:
 
 	void drawPreview();
 
-	void setVisible(bool visible) {
+	void setVisible(bool visible) override {
 		updateSnippets();
 		drawPreview();
 
@@ -305,7 +308,7 @@ protected slots:
 	}
 
 public slots:
-	virtual void accept();
+	virtual void accept() override;
 
 protected:
 	QImage mImg;
@@ -354,8 +357,7 @@ class DkShortcutDelegate : public QItemDelegate {
 public:
 	DkShortcutDelegate(QObject* parent = 0);
 
-	QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const;
-
+	QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override;
 	QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
 signals:
@@ -368,11 +370,10 @@ protected slots:
 	void keySequenceChanged(const QKeySequence& keySequence);
 
 protected:
-	bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index);
-	void setEditorData(QWidget* editor, const QModelIndex& index) const;
-	void* mItem;
-	//virtual void setEditorData(QWidget* editor, const QModelIndex& index) const;
+	bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index)  override;
+	void setEditorData(QWidget* editor, const QModelIndex& index) const override;
 	void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+	void* mItem;
 
 	QPixmap mClearPm;
 };
@@ -535,7 +536,7 @@ private:
 	QVector<QSharedPointer<DkPrintImage> > mPrintImages;
 };
 
-class DkPrintPreviewDialog : public QMainWindow {
+class DkPrintPreviewDialog : public QDialog {
 	Q_OBJECT
 
 public:
@@ -559,9 +560,6 @@ public:
 
 	void init();
 
-public slots:
-	void updateZoomFactor();
-
 protected:
 	void createLayout();
 	void createIcons();
@@ -577,9 +575,7 @@ private slots:
 	void previewFitWidth();
 	void previewFitPage();
 
-
 private:
-	QSpinBox* mZoomFactor = 0;
 	QSpinBox* mDpiBox = 0;
 
 	DkPrintPreviewWidget* mPreview = 0;
@@ -612,8 +608,8 @@ public slots:
 	void on_saveButton_pressed();
 	void on_fileEdit_textChanged(const QString& filename);
 	void setFile(const QString& filePath);
-	void accept();
-	void reject();
+	void accept() override;
+	void reject() override;
 	int exportImages(const QString& saveFilePath, int from, int to, bool overwrite);
 	void processingFinished();
 
@@ -626,8 +622,9 @@ protected:
 	void createLayout();
 	void enableTIFFSave(bool enable);
 	void enableAll(bool enable);
-	void dropEvent(QDropEvent *event);
-	void dragEnterEvent(QDragEnterEvent *event);
+
+	void dropEvent(QDropEvent *event) override;
+	void dragEnterEvent(QDragEnterEvent *event) override;
 
 	DkBaseViewPort* mViewport;
 	QLabel* mTiffLabel;
@@ -680,7 +677,7 @@ public slots:
 	
 	void setFile(const QString& file);
 	void compute();
-	void reject();
+	void reject() override;
 	int computeMosaic(const QString& filter, const QString& suffix, int from, int to);		// TODO: make const!
 	void mosaicFinished();
 	void postProcessFinished();
@@ -698,12 +695,13 @@ protected:
 	void createLayout();
 	void enableMosaicSave(bool enable);
 	void enableAll(bool enable);
-	void dropEvent(QDropEvent *event);
-	void dragEnterEvent(QDragEnterEvent *event);
 	QString getRandomImagePath(const QString& cPath, const QString& ignore, const QString& suffix);
 	void matchPatch(const cv::Mat& img, const cv::Mat& thumb, int patchRes, cv::Mat& cc);
 	cv::Mat createPatch(const DkThumbNail& thumb, int patchRes);
-	
+
+	void dropEvent(QDropEvent *event) override;
+	void dragEnterEvent(QDragEnterEvent *event) override;
+
 	DkBaseViewPort* mViewport = 0;
 	DkBaseViewPort* mPreview = 0;
 	QLabel* mFileLabel = 0;
@@ -776,7 +774,7 @@ public:
 	bool isLanguageChanged();
 
 public slots:
-	virtual void accept();
+	virtual void accept() override;
 
 protected:
 	void createLayout();
@@ -822,13 +820,20 @@ public:
 	DkChooseMonitorDialog(QWidget* parent);
 
 	QRect screenRect() const;
+	bool showDialog() const;
+
+public slots:
+	int exec() override;
 
 private:
 	void createLayout();
-	QVector<QRect> screenRects() const;
+	QList<QScreen*> screens() const;
+	void loadSettings();
+	void saveSettings() const;
 
-	QVector<QRect> mScreenRects;
-	QComboBox* mMonitorBox;
+	QList<QScreen*> mScreens;
+	DkDisplayWidget* mDisplayWidget;
+	QCheckBox* mCbRemember;
 };
 
 
@@ -848,11 +853,11 @@ public slots:
 	void loadArchive(const QString& filePath = "");
 	void openArchive();
 	void openDir();
-	void accept();
+	void accept() override;
 
 protected:
-	void dragEnterEvent(QDragEnterEvent *event);
-	void dropEvent(QDropEvent *event);
+	void dragEnterEvent(QDragEnterEvent *event) override;
+	void dropEvent(QDropEvent *event) override;
 
 	void createLayout();
 	void userFeedback(const QString& msg, bool error = false);
@@ -877,9 +882,16 @@ class DkDialogManager : public QObject {
 public:
 	DkDialogManager(QObject* parent = 0);
 
+	void setCentralWidget(DkCentralWidget* cw);
+
 public slots:
 	void openShortcutsDialog() const;
 	void openAppManager() const;
+	void openMosaicDialog() const;
+	void openPrintDialog() const;
+
+private:
+	DkCentralWidget* mCentralWidget = 0;
 };
 
 }

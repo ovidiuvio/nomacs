@@ -18,6 +18,11 @@
 - double-click `make-installer.bat`
 - check if the newly created installer `noamcs-setup.msi` is signed
 - upload `nomacs-setup.msi` to http://download.nomacs.org/htdocs/
+- if you think you are ready to triger automated updates:
+    - open ssh with nomacs.org
+    - ``cd /var/www/version``
+    - ``sudo vim version_win_stable``
+    - then update the version number
 
 ### nomacs portable
 
@@ -29,6 +34,13 @@
 - update the index.html accordingly
 - update http://download.nomacs.org/htdocs/versions/index.html
 
+### Certificate
+
+- Install the Certificate (double click TU-code-signing-2018.p12)
+- type `signtool sign /n "Technische Universität Wien" /t http://timestamp.digicert.com .\nomacs.%ARCH%\nomacs.exe`
+- encode the file using `Central European OEM852`
+
+
 ## READ release
 
 - Update Version Number in ReadFramework (in CMakeLists.txt and rdf.rc)
@@ -39,14 +51,6 @@
 - make-installer.bat rename `nomacs-setup.msi` to `ReadFramework.msi`
 - nomacs-setup.wxs comment default nomacs, uncomment read build
 - nomacs-setup.wxs update ProductVersion
-
-- make-installer.bat: Check TU-code-signng.p12 path
-- for code signing add /p pwd
-- upload the repository folder to \\hermes\ftp\staff\read
-
-- alternative version: use signtool sign /n "Technische Universität Wien"  /t http://timestamp.digicert.com .\ReadFramework.msi
-- encoding must be Central European OEM852
-- save certificate in certificate store
 
 ## Links
 [1] http://wixtoolset.org/releases/

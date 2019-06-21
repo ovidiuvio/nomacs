@@ -29,6 +29,8 @@
 #include "DkSettings.h"
 #include "DkImageStorage.h"
 #include "DkUtils.h"
+#include "DkStatusBar.h"
+#include "DkToolbars.h"
 
 #include "DkDialog.h"
 #include "DkMenu.h"
@@ -373,6 +375,7 @@ QMenu* DkActionManager::createFileMenu(QWidget* parent /* = 0 */) {
 	mFileMenu->addSeparator();
 	mFileMenu->addAction(mFileActions[menu_file_save]);
 	mFileMenu->addAction(mFileActions[menu_file_save_as]);
+	mFileMenu->addAction(mFileActions[menu_file_save_copy]);
 	if (DkSettingsManager::param().global().extendedTabs)
 		mFileMenu->addAction(mFileActions[menu_file_save_list]);
 	mFileMenu->addAction(mFileActions[menu_file_save_web]);
@@ -439,7 +442,7 @@ QMenu* DkActionManager::createViewMenu(QWidget* parent /* = 0 */) {
 
 	mViewMenu = new QMenu(QObject::tr("&View"), parent);
 
-	mViewMenu->addAction(mViewActions[menu_view_frameless]);	
+	mViewMenu->addAction(mViewActions[menu_view_frameless]);
 	mViewMenu->addAction(mViewActions[menu_view_fullscreen]);
 	mViewMenu->addSeparator();
 
@@ -481,8 +484,13 @@ QMenu* DkActionManager::createViewMenu(QWidget* parent /* = 0 */) {
 	mViewMenu->addAction(mViewActions[menu_view_movie_pause]);
 	mViewMenu->addAction(mViewActions[menu_view_movie_prev]);
 	mViewMenu->addAction(mViewActions[menu_view_movie_next]);
-
 	mViewMenu->addSeparator();
+
+	if (DkSettingsManager::param().app().currentAppMode == DkSettingsManager::param().mode_frameless) {
+		mViewMenu->addAction(mViewActions[menu_view_monitors]);
+		mViewMenu->addSeparator();
+	}
+	
 	mViewMenu->addAction(mViewActions[menu_view_gps_map]);
 
 	return mViewMenu;
@@ -538,11 +546,12 @@ QMenu* DkActionManager::createPanelMenu(QWidget* parent) {
 
 	mPanelMenu->addAction(mPanelActions[menu_panel_explorer]);
 	mPanelMenu->addAction(mPanelActions[menu_panel_metadata_dock]);
+	mPanelMenu->addAction(mPanelActions[menu_panel_exif]);
 	mPanelMenu->addAction(mPanelActions[menu_panel_history]);
 	mPanelMenu->addAction(mPanelActions[menu_panel_preview]);
 	mPanelMenu->addAction(mPanelActions[menu_panel_thumbview]);
 	mPanelMenu->addAction(mPanelActions[menu_panel_scroller]);
-	mPanelMenu->addAction(mPanelActions[menu_panel_exif]);
+	mPanelMenu->addAction(mPanelActions[menu_panel_log]);
 
 	mPanelMenu->addSeparator();
 
@@ -582,19 +591,6 @@ QMenu* DkActionManager::createToolsMenu(QWidget* parent /* = 0 */) {
 	return mToolsMenu;
 }
 
-void DkActionManager::addSyncMenu(QMenu* syncMenu, DkTcpMenu* localMenu) {
-
-	mSyncMenu = syncMenu;
-	mLocalMenu = localMenu;
-
-	mSyncMenu->addMenu(localMenu);
-
-	mSyncMenu->addAction(mSyncActions[menu_sync]);
-	mSyncMenu->addAction(mSyncActions[menu_sync_pos]);
-	mSyncMenu->addAction(mSyncActions[menu_sync_arrange]);
-	mSyncMenu->addAction(mSyncActions[menu_sync_all_actions]);
-}
-
 QMenu* DkActionManager::createHelpMenu(QWidget* parent) {
 
 	mHelpMenu = new QMenu(QObject::tr("&?"), parent);
@@ -611,6 +607,26 @@ QMenu* DkActionManager::createHelpMenu(QWidget* parent) {
 	return mHelpMenu;
 }
 
+QMenu* DkActionManager::createSyncMenu(QWidget * parent) {
+	
+	mSyncMenu = new QMenu(QObject::tr("&Sync"), parent);
+
+	// local host menu
+	mLocalMenu = new DkTcpMenu(QObject::tr("&Synchronize"), mSyncMenu);
+	mLocalMenu->showNoClientsFound(true);
+	
+	// add connect all action
+	mLocalMenu->addTcpAction(mSyncActions[menu_sync_connect_all]);
+
+	mSyncMenu->addMenu(mLocalMenu);
+	mSyncMenu->addAction(mSyncActions[menu_sync_view]);
+	mSyncMenu->addAction(mSyncActions[menu_sync_pos]);
+	mSyncMenu->addAction(mSyncActions[menu_sync_arrange]);
+	mSyncMenu->addAction(mSyncActions[menu_sync_all_actions]);
+
+	return mSyncMenu;
+}
+
 QMenu* DkActionManager::createContextMenu(QWidget* parent) {
 
 
@@ -624,6 +640,7 @@ QMenu* DkActionManager::createContextMenu(QWidget* parent) {
 
 	mContextMenu->addAction(mViewActions[menu_view_frameless]);
 	mContextMenu->addAction(mViewActions[menu_view_fullscreen]);
+	mContextMenu->addAction(mPanelActions[menu_panel_menu]);
 	mContextMenu->addSeparator();
 
 	if (DkSettingsManager::param().global().extendedTabs) {
@@ -876,6 +893,7 @@ void DkActionManager::createMenus(QWidget* parent) {
 	createManipulatorMenu(parent);
 	createToolsMenu(parent);
 	createPanelMenu(parent);
+	createSyncMenu(parent);
 	createHelpMenu(parent);
 	createContextMenu(parent);
 }
@@ -897,17 +915,18 @@ void DkActionManager::createIcons() {
 	mFileIcons[icon_file_dir] = DkImage::loadIcon(":/nomacs/img/dir.svg");
 	mFileIcons[icon_file_open] = DkImage::loadIcon(":/nomacs/img/open.svg");
 	mFileIcons[icon_file_save] = DkImage::loadIcon(":/nomacs/img/save.svg");
-	mFileIcons[icon_file_print] = DkImage::loadIcon(":/nomacs/img/printer.svg");
+	mFileIcons[icon_file_print] = DkImage::loadIcon(":/nomacs/img/print.svg");
 	mFileIcons[icon_file_open_large] = QIcon(":/nomacs/img/open.svg");
 	mFileIcons[icon_file_dir_large] = QIcon(":/nomacs/img/dir.svg");
 	mFileIcons[icon_file_prev] = DkImage::loadIcon(":/nomacs/img/previous.svg");
 	mFileIcons[icon_file_next] = DkImage::loadIcon(":/nomacs/img/next.svg");
 	mFileIcons[icon_file_filter] = DkImage::loadIcon();
 	mFileIcons[icon_file_filter].addPixmap(DkImage::loadIcon(":/nomacs/img/filter.svg"), QIcon::Normal, QIcon::On);
-	mFileIcons[icon_file_filter].addPixmap(DkImage::loadIcon(":/nomacs/img/nofilter.svg"), QIcon::Normal, QIcon::Off);
+	mFileIcons[icon_file_filter].addPixmap(DkImage::loadIcon(":/nomacs/img/filter-disabled.svg"), QIcon::Normal, QIcon::Off);
+	mFileIcons[icon_file_find] = DkImage::loadIcon(":/nomacs/img/find.svg");
 
 	mEditIcons.resize(icon_edit_end);
-	mEditIcons[icon_edit_image] = DkImage::loadIcon(":/nomacs/img/manipulation.svg");
+	mEditIcons[icon_edit_image] = DkImage::loadIcon(":/nomacs/img/sliders.svg");
 	mEditIcons[icon_edit_rotate_cw] = DkImage::loadIcon(":/nomacs/img/rotate-cw.svg");
 	mEditIcons[icon_edit_rotate_ccw] = DkImage::loadIcon(":/nomacs/img/rotate-cc.svg");
 	mEditIcons[icon_edit_crop] = DkImage::loadIcon(":/nomacs/img/crop.svg");
@@ -918,17 +937,17 @@ void DkActionManager::createIcons() {
 
 	mViewIcons.resize(icon_view_end);
 	mViewIcons[icon_view_fullscreen] = DkImage::loadIcon(":/nomacs/img/fullscreen.svg");
-	mViewIcons[icon_view_reset] = DkImage::loadIcon(":/nomacs/img/zoomReset.svg");
-	mViewIcons[icon_view_100] = DkImage::loadIcon(":/nomacs/img/zoom100.svg");
-	mViewIcons[icon_view_gps] = DkImage::loadIcon(":/nomacs/img/gps-globe.svg");
+	mViewIcons[icon_view_reset] = DkImage::loadIcon(":/nomacs/img/zoom-reset.svg");
+	mViewIcons[icon_view_100] = DkImage::loadIcon(":/nomacs/img/zoom-100.svg");
+	mViewIcons[icon_view_gps] = DkImage::loadIcon(":/nomacs/img/location.svg");
 	mViewIcons[icon_view_zoom_in] = DkImage::loadIcon(":/nomacs/img/zoom-in.svg");
 	mViewIcons[icon_view_zoom_out] = DkImage::loadIcon(":/nomacs/img/zoom-out.svg");
 
-	mViewIcons[icon_view_movie_play] = DkImage::loadIcon();
-	mViewIcons[icon_view_movie_play].addPixmap(QPixmap(":/nomacs/img/movie-play.svg"), QIcon::Normal, QIcon::On);
-	mViewIcons[icon_view_movie_play].addPixmap(QPixmap(":/nomacs/img/movie-pause.svg"), QIcon::Normal, QIcon::Off);
-	mViewIcons[icon_view_movie_prev] = DkImage::loadIcon(":/nomacs/img/movie-prev.svg");
-	mViewIcons[icon_view_movie_next] = DkImage::loadIcon(":/nomacs/img/movie-next.svg");
+	mViewIcons[icon_view_movie_play] = DkImage::loadIcon(":/nomacs/img/play.svg");
+	mViewIcons[icon_view_movie_play].addPixmap(DkImage::loadIcon(":/nomacs/img/play.svg"), QIcon::Normal, QIcon::On);
+	mViewIcons[icon_view_movie_play].addPixmap(DkImage::loadIcon(":/nomacs/img/pause.svg"), QIcon::Normal, QIcon::Off);
+	mViewIcons[icon_view_movie_prev] = DkImage::loadIcon(":/nomacs/img/previous.svg");
+	mViewIcons[icon_view_movie_next] = DkImage::loadIcon(":/nomacs/img/next.svg");
 }
 
 void DkActionManager::createActions(QWidget* parent) {
@@ -971,9 +990,12 @@ void DkActionManager::createActions(QWidget* parent) {
 	mFileActions[menu_file_save]->setShortcuts(QKeySequence::Save);
 	mFileActions[menu_file_save]->setStatusTip(QObject::tr("Save an image"));
 
-	mFileActions[menu_file_save_as] = new QAction(QObject::tr("&Save As"), parent);
+	mFileActions[menu_file_save_as] = new QAction(QObject::tr("S&ave As"), parent);
 	mFileActions[menu_file_save_as]->setShortcut(QKeySequence(shortcut_save_as));
 	mFileActions[menu_file_save_as]->setStatusTip(QObject::tr("Save an image as"));
+
+	mFileActions[menu_file_save_copy] = new QAction(QObject::tr("Sa&ve a Copy"), parent);
+	mFileActions[menu_file_save_copy]->setStatusTip(QObject::tr("Copy the Image"));
 
 	mFileActions[menu_file_save_list] = new QAction(QObject::tr("&Save Tabs"), parent);
 	mFileActions[menu_file_save_list]->setStatusTip(QObject::tr("Save a newline separated list of the filenames of the open tabs"));
@@ -1014,7 +1036,7 @@ void DkActionManager::createActions(QWidget* parent) {
 	mFileActions[menu_file_private_instance]->setShortcut(QKeySequence(shortcut_private_instance));
 	mFileActions[menu_file_private_instance]->setStatusTip(QObject::tr("Open private instance"));
 
-	mFileActions[menu_file_find] = new QAction(QObject::tr("&Find && Filter"), parent);
+	mFileActions[menu_file_find] = new QAction(mFileIcons[icon_file_find], QObject::tr("&Find && Filter"), parent);
 	mFileActions[menu_file_find]->setShortcut(QKeySequence::Find);
 	mFileActions[menu_file_find]->setStatusTip(QObject::tr("Find an image"));
 
@@ -1148,7 +1170,7 @@ void DkActionManager::createActions(QWidget* parent) {
 
 	// panel actions
 	mPanelActions.resize(menu_panel_end);
-	mPanelActions[menu_panel_menu] = new QAction(QObject::tr("&Menu"), parent);
+	mPanelActions[menu_panel_menu] = new QAction(QObject::tr("Show &Menu"), parent);
 	mPanelActions[menu_panel_menu]->setStatusTip(QObject::tr("Hides the Menu and Shows it Again on ALT"));
 	mPanelActions[menu_panel_menu]->setCheckable(true);
 
@@ -1183,6 +1205,7 @@ void DkActionManager::createActions(QWidget* parent) {
 	mPanelActions[menu_panel_toggle]->setShortcut(QKeySequence(shortcut_toggle_panels));
 	mPanelActions[menu_panel_toggle]->setStatusTip(QObject::tr("Hide all panels"));
 	mPanelActions[menu_panel_toggle]->setCheckable(true);
+	mPanelActions[menu_panel_toggle]->setChecked(DkSettingsManager::param().app().hideAllPanels);
 
 	mPanelActions[menu_panel_explorer] = new QAction(QObject::tr("File &Explorer"), parent);
 	mPanelActions[menu_panel_explorer]->setShortcut(QKeySequence(shortcut_show_explorer));
@@ -1208,7 +1231,7 @@ void DkActionManager::createActions(QWidget* parent) {
 	mPanelActions[menu_panel_scroller]->setStatusTip(QObject::tr("Show Folder Scrollbar"));
 	mPanelActions[menu_panel_scroller]->setCheckable(true);
 
-	mPanelActions[menu_panel_exif] = new QAction(QObject::tr("&Metadata"), parent);
+	mPanelActions[menu_panel_exif] = new QAction(QObject::tr("&Metadata Ribbon"), parent);
 	mPanelActions[menu_panel_exif]->setShortcut(QKeySequence(shortcut_show_exif));
 	mPanelActions[menu_panel_exif]->setStatusTip(QObject::tr("Shows the Metadata Panel"));
 	mPanelActions[menu_panel_exif]->setCheckable(true);
@@ -1232,6 +1255,11 @@ void DkActionManager::createActions(QWidget* parent) {
 	mPanelActions[menu_panel_history]->setStatusTip(QObject::tr("Shows the edit history"));
 	mPanelActions[menu_panel_history]->setShortcut(QKeySequence(shortcut_show_history));
 	mPanelActions[menu_panel_history]->setCheckable(true);
+
+	mPanelActions[menu_panel_log] = new QAction(QObject::tr("Show &Log"), parent);
+	mPanelActions[menu_panel_log]->setStatusTip(QObject::tr("Shows the log window"));
+	mPanelActions[menu_panel_log]->setShortcut(QKeySequence(shortcut_show_log));
+	mPanelActions[menu_panel_log]->setCheckable(true);
 
 	// view actions
 	mViewActions.resize(menu_view_end);
@@ -1346,6 +1374,9 @@ void DkActionManager::createActions(QWidget* parent) {
 	mViewActions[menu_view_movie_next] = new QAction(mViewIcons[icon_view_movie_next], QObject::tr("&Next Frame"), parent);
 	mViewActions[menu_view_movie_next]->setStatusTip(QObject::tr("show next frame"));
 
+	mViewActions[menu_view_monitors] = new QAction(QObject::tr("Choose &Monitor"), parent);
+	mViewActions[menu_view_monitors]->setStatusTip(QObject::tr("Choose the Monitor to run nomacs"));
+
 	mViewActions[menu_view_gps_map] = new QAction(mViewIcons[icon_view_gps], QObject::tr("Show Image Location"), parent);
 	mViewActions[menu_view_gps_map]->setStatusTip(QObject::tr("shows where the image was taken in Google maps"));
 	mViewActions[menu_view_gps_map]->setEnabled(false);
@@ -1404,10 +1435,10 @@ void DkActionManager::createActions(QWidget* parent) {
 
 	// sync actions
 	mSyncActions.resize(menu_sync_end);
-	mSyncActions[menu_sync] = new QAction(QObject::tr("Synchronize &View"), parent);
-	mSyncActions[menu_sync]->setShortcut(QKeySequence(shortcut_sync));
-	mSyncActions[menu_sync]->setStatusTip(QObject::tr("synchronize the current view"));
-	mSyncActions[menu_sync]->setEnabled(false);
+	mSyncActions[menu_sync_view] = new QAction(QObject::tr("Synchronize &View"), parent);
+	mSyncActions[menu_sync_view]->setShortcut(QKeySequence(shortcut_sync));
+	mSyncActions[menu_sync_view]->setStatusTip(QObject::tr("synchronize the current view"));
+	mSyncActions[menu_sync_view]->setEnabled(false);
 
 	mSyncActions[menu_sync_pos] = new QAction(QObject::tr("&Window Overlay"), parent);
 	mSyncActions[menu_sync_pos]->setShortcut(QKeySequence(shortcut_tab));
@@ -1447,7 +1478,7 @@ void DkActionManager::createActions(QWidget* parent) {
 	mPreviewActions[preview_zoom_out] = new QAction(DkImage::loadIcon(":/nomacs/img/zoom-out.svg"), QObject::tr("Zoom &Out"), parent);
 	mPreviewActions[preview_zoom_out]->setShortcut(QKeySequence::ZoomOut);
 
-	mPreviewActions[preview_display_squares] = new QAction(DkImage::loadIcon(":/nomacs/img/thumbs-view.svg"), QObject::tr("Display &Squares"), parent);
+	mPreviewActions[preview_display_squares] = new QAction(DkImage::loadIcon(":/nomacs/img/rects.svg"), QObject::tr("Display &Squares"), parent);
 	mPreviewActions[preview_display_squares]->setCheckable(true);
 	mPreviewActions[preview_display_squares]->setChecked(DkSettingsManager::param().display().displaySquaredThumbs);
 
@@ -1474,7 +1505,7 @@ void DkActionManager::createActions(QWidget* parent) {
 	mPreviewActions[preview_batch]->setToolTip(QObject::tr("Adds selected files to batch processing."));
 	mPreviewActions[preview_batch]->setShortcut(QKeySequence(Qt::Key_B));
 
-	mPreviewActions[preview_print] = new QAction(DkImage::loadIcon(":/nomacs/img/printer.svg"), QObject::tr("&Batch Print"), parent);
+	mPreviewActions[preview_print] = new QAction(DkImage::loadIcon(":/nomacs/img/print.svg"), QObject::tr("&Batch Print"), parent);
 	mPreviewActions[preview_print]->setToolTip(QObject::tr("Prints selected files."));
 	mPreviewActions[preview_print]->setShortcut(QKeySequence::Print);
 
@@ -1578,6 +1609,20 @@ void DkActionManager::createActions(QWidget* parent) {
 		a->setToolTip(a->statusTip());
 		a->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 	}
+	
+	// trivial connects
+	QObject::connect(action(menu_panel_toggle), &QAction::triggered,
+		[](bool hide) { DkSettingsManager::param().app().hideAllPanels = hide; });
+
+	QObject::connect(action(menu_panel_statusbar), &QAction::triggered,
+		[](bool show) { DkStatusBarManager::instance().show(show); });
+
+	QObject::connect(action(menu_panel_toolbar), &QAction::triggered,
+		[](bool show) { DkToolBarManager::inst().showDefaultToolBar(show); });
+
+	QObject::connect(action(menu_sync_all_actions), &QAction::triggered,
+		[](bool sync) { DkSettingsManager::param().sync().syncActions = sync; });
+
 }
 
 QVector<QAction*> DkActionManager::allActions() const {
@@ -1624,6 +1669,89 @@ void DkActionManager::assignCustomShortcuts(QVector<QAction*> actions) const {
 	}
 
 	settings.endGroup();
+}
+
+void DkActionManager::enableImageActions(bool enable) const {
+	
+	action(DkActionManager::menu_file_save)->setEnabled(enable);
+	action(DkActionManager::menu_file_save_as)->setEnabled(enable);
+	action(DkActionManager::menu_file_save_copy)->setEnabled(enable);
+	action(DkActionManager::menu_file_save_list)->setEnabled(enable);
+	action(DkActionManager::menu_file_save_web)->setEnabled(enable);
+	action(DkActionManager::menu_file_rename)->setEnabled(enable);
+	action(DkActionManager::menu_file_print)->setEnabled(enable);
+	action(DkActionManager::menu_file_reload)->setEnabled(enable);
+	action(DkActionManager::menu_file_prev)->setEnabled(enable);
+	action(DkActionManager::menu_file_next)->setEnabled(enable);
+	action(DkActionManager::menu_file_goto)->setEnabled(enable);
+	action(DkActionManager::menu_file_find)->setEnabled(enable);
+
+	action(DkActionManager::menu_edit_rotate_cw)->setEnabled(enable);
+	action(DkActionManager::menu_edit_rotate_ccw)->setEnabled(enable);
+	action(DkActionManager::menu_edit_rotate_180)->setEnabled(enable);
+	action(DkActionManager::menu_edit_delete)->setEnabled(enable);
+	action(DkActionManager::menu_edit_transform)->setEnabled(enable);
+	action(DkActionManager::menu_edit_crop)->setEnabled(enable);
+	action(DkActionManager::menu_edit_copy)->setEnabled(enable);
+	action(DkActionManager::menu_edit_copy_buffer)->setEnabled(enable);
+	action(DkActionManager::menu_edit_copy_color)->setEnabled(enable);
+	action(DkActionManager::menu_edit_undo)->setEnabled(enable);
+	action(DkActionManager::menu_edit_redo)->setEnabled(enable);
+
+
+	action(DkActionManager::menu_panel_info)->setEnabled(enable);
+#ifdef WITH_OPENCV
+	action(DkActionManager::menu_panel_histogram)->setEnabled(enable);
+#else
+	action(DkActionManager::menu_panel_histogram)->setEnabled(false);
+#endif
+	action(DkActionManager::menu_panel_scroller)->setEnabled(enable);
+	action(DkActionManager::menu_panel_comment)->setEnabled(enable);
+	action(DkActionManager::menu_panel_preview)->setEnabled(enable);
+	action(DkActionManager::menu_panel_exif)->setEnabled(enable);
+	action(DkActionManager::menu_panel_overview)->setEnabled(enable);
+	action(DkActionManager::menu_panel_player)->setEnabled(enable);
+	action(DkActionManager::menu_panel_thumbview)->setEnabled(enable);
+
+	action(DkActionManager::menu_view_slideshow)->setEnabled(enable);
+	action(DkActionManager::menu_view_fullscreen)->setEnabled(enable);
+	action(DkActionManager::menu_view_reset)->setEnabled(enable);
+	action(DkActionManager::menu_view_100)->setEnabled(enable);
+	action(DkActionManager::menu_view_fit_frame)->setEnabled(enable);
+	action(DkActionManager::menu_view_zoom_in)->setEnabled(enable);
+	action(DkActionManager::menu_view_zoom_out)->setEnabled(enable);
+	action(DkActionManager::menu_view_tp_pattern)->setEnabled(enable);
+	action(DkActionManager::menu_view_anti_aliasing)->setEnabled(enable);
+
+	action(DkActionManager::menu_tools_wallpaper)->setEnabled(enable);
+	action(DkActionManager::menu_tools_thumbs)->setEnabled(enable);
+
+	// hidden actions
+	action(DkActionManager::sc_skip_prev)->setEnabled(enable);
+	action(DkActionManager::sc_skip_prev_sync)->setEnabled(enable);
+	action(DkActionManager::sc_skip_next)->setEnabled(enable);
+	action(DkActionManager::sc_skip_next_sync)->setEnabled(enable);
+	action(DkActionManager::sc_first_file)->setEnabled(enable);
+	action(DkActionManager::sc_first_file_sync)->setEnabled(enable);
+	action(DkActionManager::sc_last_file)->setEnabled(enable);
+	action(DkActionManager::sc_last_file_sync)->setEnabled(enable);
+
+	// disable open with actions
+	for (QAction* a : DkActionManager::instance().appManager()->getActions())
+		a->setEnabled(enable);
+}
+
+void DkActionManager::enableMovieActions(bool enable) const {
+
+	DkSettingsManager::param().app().showMovieToolBar = enable;
+
+	action(DkActionManager::menu_view_movie_pause)->setEnabled(enable);
+	action(DkActionManager::menu_view_movie_prev)->setEnabled(enable);
+	action(DkActionManager::menu_view_movie_next)->setEnabled(enable);
+
+	action(DkActionManager::menu_view_movie_pause)->setChecked(false);
+
+	DkToolBarManager::inst().showMovieToolBar(enable);
 }
 
 // DkGlobalProgress --------------------------------------------------------------------

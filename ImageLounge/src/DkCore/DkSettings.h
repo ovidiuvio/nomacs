@@ -33,6 +33,7 @@
 #include <QColor>
 #include <QDate>
 #include <QSharedPointer>
+#include <QVector>
 #pragma warning(pop)	// no warnings from includes - end
 
 #pragma warning(disable: 4251)	// TODO: remove
@@ -156,6 +157,14 @@ public:
 		trans_end
 	};
 
+	enum LoadSaveMode {
+		ls_load,
+		ls_load_to_tab,
+		ls_do_nothing,
+
+		ls,end
+	};
+
 	struct App {
 		bool showToolBar;
 		bool showMenuBar;
@@ -173,6 +182,7 @@ public:
 		QBitArray showMetaDataDock;
 		QBitArray showEditDock;
 		QBitArray showHistoryDock;
+		QBitArray showLogDock;
 		bool showRecentFiles;
 		bool useLogFile;
 		int appMode;
@@ -180,7 +190,7 @@ public:
 		bool privateMode;
 		bool advancedSettings;
 		bool closeOnEsc;
-		bool maximizedMode;
+		bool hideAllPanels;
 
 		int defaultJpgQuality;
 
@@ -248,7 +258,6 @@ public:
 		bool logRecentFiles;
 		bool checkOpenDuplicates;
 		bool extendedTabs;
-		bool useTmpPath;
 		bool askToSaveDeletedFiles;
 		QString tmpPath;
 		QString language;
@@ -302,22 +311,7 @@ public:
 		int loadRawThumb;
 		QString preferredExtension;
 		bool gammaCorrection;
-	};
-
-	//enums for checkboxes - divide in camera data and description
-	enum cameraData {
-		camData_size,
-		camData_orientation,
-		camData_make,
-		camData_model,
-		camData_aperture,
-		camData_iso,
-		camData_flash,
-		camData_focal_length,
-		camData_exposure_mode,
-		camData_exposure_time,
-
-		camData_end
+		int loadSavedImage;
 	};
 
 	enum DisplayItems{
@@ -337,7 +331,7 @@ public:
 
 	void load();
 	void load(QSettings& settings, bool defaults = false);
-	void save();
+	void save(bool force = false);
 	void save(QSettings& settings, bool force = false);
 	void setToDefaultSettings();
 	void setNumThreads(int numThreads);
@@ -409,6 +403,40 @@ private:
 
 	//QSettings* mSettings = 0;
 	DkSettings* mParams = 0;
+};
+
+class DkZoomConfig {
+
+public:
+	static DkZoomConfig& instance();
+	~DkZoomConfig();
+
+	// singleton
+	DkZoomConfig(DkZoomConfig const&) = delete;
+	void operator=(DkZoomConfig const&) = delete;
+
+	double nextFactor(double currentFactor, double delta) const;
+	QVector<double> defaultLevels() const;
+
+	bool useLevels() const;
+	void setUseLevels(bool useLevels);
+
+	bool setLevels(const QString& levelStr);
+	QString levelsToString() const;
+
+	void setLevelsToDefault();
+
+	static bool checkLevels(const QVector<double>& levels);
+
+private:
+
+	QVector<double> mLevels;
+	bool mUseLevels = false;
+
+	DkZoomConfig();
+	void loadSettings(QSettings& settings);
+	void saveSettings(QSettings& settings) const;
+
 };
 
 }

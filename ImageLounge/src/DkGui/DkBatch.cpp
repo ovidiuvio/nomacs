@@ -308,8 +308,18 @@ void DkInputTextEdit::clear() {
 	QTextEdit::clear();
 }
 
+QString DkInputTextEdit::firstDirPath() const {
+	
+	QStringList fl = getFileList();
+
+	if (fl.isEmpty())
+		return "";
+	
+	return QFileInfo(fl[0]).absolutePath();
+}
+
 // File Selection --------------------------------------------------------------------
-DkBatchInput::DkBatchInput(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : QWidget(parent, f) {
+DkBatchInput::DkBatchInput(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : DkWidget(parent, f) {
 
 	setObjectName("DkBatchInput");
 	createLayout();
@@ -349,8 +359,8 @@ void DkBatchInput::createLayout() {
 
 	// tab widget
 	mInputTabs = new QTabWidget(this);
-	mInputTabs->addTab(mThumbScrollWidget,  QIcon(":/nomacs/img/thumbs-view.svg"), tr("Thumbnails"));
-	mInputTabs->addTab(mInputTextEdit, QIcon(":/nomacs/img/batch-processing.svg"), tr("File List"));
+	mInputTabs->addTab(mThumbScrollWidget,  QIcon(":/nomacs/img/rects.svg"), tr("Thumbnails"));
+	mInputTabs->addTab(mInputTextEdit, QIcon(":/nomacs/img/bars.svg"), tr("File List"));
 
 	QGridLayout* widgetLayout = new QGridLayout(this);
 	widgetLayout->setContentsMargins(0, 0, 0, 0);
@@ -470,6 +480,12 @@ void DkBatchInput::selectionChanged() {
 	else
 		msg = tr("%1 Files Selected").arg(getSelectedFiles().size());
 	
+
+	QString d = mInputTextEdit->firstDirPath();
+
+	if (!d.isEmpty() && mCDirPath != d)
+		setDir(d);
+
 	emit newHeaderText(msg);
 	emit changed();
 }
@@ -478,8 +494,6 @@ void DkBatchInput::parameterChanged() {
 	
 	QString newDirPath = mDirectoryEdit->text();
 		
-	qDebug() << "edit text newDir: " << newDirPath << " mCDir " << mCDirPath;
-
 	if (QDir(newDirPath).exists() && newDirPath != mCDirPath) {
 		setDir(newDirPath);
 		emit changed();
@@ -518,7 +532,7 @@ void DkBatchInput::stopProcessing() {
 }
 
 // DkFileNameWdiget --------------------------------------------------------------------
-DkFilenameWidget::DkFilenameWidget(QWidget* parent) : QWidget(parent) {
+DkFilenameWidget::DkFilenameWidget(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	showOnlyFilename();
@@ -722,7 +736,7 @@ bool DkFilenameWidget::setTag(const QString & tag) {
 }
 
 // DkBatchOutput --------------------------------------------------------------------
-DkBatchOutput::DkBatchOutput(QWidget* parent , Qt::WindowFlags f ) : QWidget(parent, f) {
+DkBatchOutput::DkBatchOutput(QWidget* parent , Qt::WindowFlags f ) : DkWidget(parent, f) {
 
 	setObjectName("DkBatchOutput");
 	createLayout();
@@ -806,17 +820,18 @@ void DkBatchOutput::createLayout() {
 	mCbNewExtension->setEnabled(false);
 	connect(mCbNewExtension, SIGNAL(currentIndexChanged(int)), this, SLOT(parameterChanged()));
 
-	QLabel* compressionLabel = new QLabel(tr("Quality"), this);
-
-	mSbCompression = new QSpinBox(this);
-	mSbCompression->setMinimum(1);
-	mSbCompression->setMaximum(100);
-	mSbCompression->setEnabled(false);
+	mCbCompression = new QComboBox(this);
+	mCbCompression->addItem(tr("Best Quality"), 100);
+	mCbCompression->addItem(tr("High Quality"), 97);
+	mCbCompression->addItem(tr("Medium Quality"), 90);
+	mCbCompression->addItem(tr("Low Quality"), 80);
+	mCbCompression->addItem(tr("Bad Quality"), 60);
+	mCbCompression->setCurrentIndex(1);
+	mCbCompression->setEnabled(false);
 
 	extensionLayout->addWidget(mCbExtension);
 	extensionLayout->addWidget(mCbNewExtension);
-	extensionLayout->addWidget(compressionLabel);
-	extensionLayout->addWidget(mSbCompression);
+	extensionLayout->addWidget(mCbCompression);
 	//extensionLayout->addStretch();
 	mFilenameVBLayout->addWidget(extensionWidget);
 	
@@ -946,7 +961,6 @@ void DkBatchOutput::minusPressed(DkFilenameWidget* widget) {
 void DkBatchOutput::extensionCBChanged(int index) {
 	
 	mCbNewExtension->setEnabled(index > 0);
-	mSbCompression->setEnabled(index > 0);
 	parameterChanged();
 }
 
@@ -957,6 +971,10 @@ bool DkBatchOutput::hasUserInput() const {
 }
 
 void DkBatchOutput::parameterChanged() {
+
+	// enable/disable compression combo
+	QString extStr = mCbNewExtension->currentText();
+	mCbCompression->setEnabled(extStr.contains(QRegExp("(jpg|jp2|webp)", Qt::CaseInsensitive)));
 
 	updateFileLabelPreview();
 	emit changed();
@@ -1052,10 +1070,10 @@ void DkBatchOutput::loadFilePattern(const QString & pattern) {
 
 int DkBatchOutput::getCompression() const {
 
-	if (!mSbCompression->isEnabled())
+	if (!mCbCompression->isEnabled())
 		return -1;
 
-	return mSbCompression->value();
+	return mCbCompression->itemData(mCbCompression->currentIndex()).toInt();
 }
 
 void DkBatchOutput::applyDefault() {
@@ -1066,7 +1084,7 @@ void DkBatchOutput::applyDefault() {
 	mCbDoNotSave->setChecked(false);
 	mCbExtension->setCurrentIndex(0);
 	mCbNewExtension->setCurrentIndex(0);
-	mSbCompression->setValue(90);
+	mCbCompression->setCurrentIndex(0);
 	mOutputDirectory = "";
 	mInputDirectory = "";
 	mHUserInput = false;
@@ -1095,7 +1113,15 @@ void DkBatchOutput::loadProperties(const DkBatchConfig & config) {
 	mCbDeleteOriginal->setChecked(si.isDeleteOriginal());
 	mCbUseInput->setChecked(si.isInputDirOutputDir());
 	mOutputlineEdit->setText(config.getOutputDirPath());
-	mSbCompression->setValue(si.compression());
+	
+	int c = si.compression();
+
+	for (int idx = 0; idx < mCbCompression->count(); idx++) {
+		if (mCbCompression->itemData(idx).toInt() == c) {
+			mCbCompression->setCurrentIndex(idx);
+			break;
+		}
+	}
 
 	loadFilePattern(config.getFileNamePattern());
 
@@ -1130,7 +1156,7 @@ void DkBatchOutput::setExampleFilename(const QString& exampleName) {
 }
 
 // DkProfileSummaryWidget --------------------------------------------------------------------
-DkProfileSummaryWidget::DkProfileSummaryWidget(QWidget* parent) : DkWidget(parent) {
+DkProfileSummaryWidget::DkProfileSummaryWidget(QWidget* parent) : DkFadeWidget(parent) {
 	createLayout();
 	setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
 	QMetaObject::connectSlotsByName(this);
@@ -1222,7 +1248,7 @@ void DkProfileSummaryWidget::createLayout() {
 
 
 // DkProfileWidget --------------------------------------------------------------------
-DkProfileWidget::DkProfileWidget(QWidget* parent, Qt::WindowFlags f) : QWidget(parent, f) {
+DkProfileWidget::DkProfileWidget(QWidget* parent, Qt::WindowFlags f) : DkWidget(parent, f) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);
@@ -1428,7 +1454,7 @@ void DkProfileWidget::saveProfile() {
 
 #ifdef WITH_PLUGINS
 // DkBatchPlugin --------------------------------------------------------------------
-DkBatchPluginWidget::DkBatchPluginWidget(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : QWidget(parent, f) {
+DkBatchPluginWidget::DkBatchPluginWidget(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : DkWidget(parent, f) {
 
 	//mSettings = DkSettingsManager::instance().qSettings();
 	DkPluginManager::instance().loadPlugins();
@@ -1715,7 +1741,7 @@ void DkBatchPluginWidget::updateHeader() const {
 #endif
 
 // DkBatchManipulatorWidget --------------------------------------------------------------------
-DkBatchManipulatorWidget::DkBatchManipulatorWidget(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : QWidget(parent, f) {
+DkBatchManipulatorWidget::DkBatchManipulatorWidget(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : DkWidget(parent, f) {
 
 	mManager.createManipulators(this);
 	createLayout();
@@ -1790,7 +1816,8 @@ void DkBatchManipulatorWidget::addSettingsWidgets(DkManipulatorManager & manager
 	mMplWidgets << new DkThresholdWidget(manager.manipulatorExt(DkManipulatorManager::m_threshold), this);
 	mMplWidgets << new DkHueWidget(manager.manipulatorExt(DkManipulatorManager::m_hue), this);
 	mMplWidgets << new DkExposureWidget(manager.manipulatorExt(DkManipulatorManager::m_exposure), this);
-	
+	mMplWidgets << new DkColorWidget(manager.manipulatorExt(DkManipulatorManager::m_color), this);
+
 	for (QWidget* w : mMplWidgets)
 		mSettingsLayout->addWidget(w);
 
@@ -1946,7 +1973,7 @@ void DkBatchManipulatorWidget::updateHeader() const {
 }
 
 // DkBatchTransform --------------------------------------------------------------------
-DkBatchTransformWidget::DkBatchTransformWidget(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : QWidget(parent, f) {
+DkBatchTransformWidget::DkBatchTransformWidget(QWidget* parent /* = 0 */, Qt::WindowFlags f /* = 0 */) : DkWidget(parent, f) {
 
 	createLayout();
 	applyDefault();
@@ -2198,7 +2225,7 @@ QRect DkBatchTransformWidget::cropRect() const {
 }
 
 // Batch Buttons --------------------------------------------------------------------
-DkBatchButtonsWidget::DkBatchButtonsWidget(QWidget* parent) : DkWidget(parent) {
+DkBatchButtonsWidget::DkBatchButtonsWidget(QWidget* parent) : DkFadeWidget(parent) {
 	createLayout();
 	setPaused();
 }
@@ -2221,9 +2248,9 @@ void DkBatchButtonsWidget::createLayout() {
 	mPlayButton->setToolTip(tr("Start/Cancel Batch Processing (%1)").arg(mPlayButton->shortcut().toString()));
 
 	icon = QIcon();
-	pm = QPixmap(DkImage::loadIcon(":/nomacs/img/batch-processing.svg", QColor(255, 255, 255), s));
+	pm = QPixmap(DkImage::loadIcon(":/nomacs/img/bars.svg", QColor(255, 255, 255), s));
 	icon.addPixmap(pm, QIcon::Normal, QIcon::On);
-	pm = QPixmap(DkImage::loadIcon(":/nomacs/img/batch-processing.svg", QColor(100, 100 , 100), s));
+	pm = QPixmap(DkImage::loadIcon(":/nomacs/img/bars.svg", QColor(100, 100 , 100), s));
 	icon.addPixmap(pm, QIcon::Disabled, QIcon::On);
 
 	mLogButton = new QPushButton(icon, "", this);
@@ -2253,7 +2280,7 @@ QPushButton * DkBatchButtonsWidget::playButton() {
 }
 
 // DkBatchInfo --------------------------------------------------------------------
-DkBatchInfoWidget::DkBatchInfoWidget(QWidget* parent) : DkWidget(parent) {
+DkBatchInfoWidget::DkBatchInfoWidget(QWidget* parent) : DkFadeWidget(parent) {
 	createLayout();
 }
 
@@ -2290,7 +2317,7 @@ void DkBatchInfoWidget::setInfo(const QString& message, const InfoMode& mode) {
 }
 
 // Batch Widget --------------------------------------------------------------------
-DkBatchWidget::DkBatchWidget(const QString& currentDirectory, QWidget* parent /* = 0 */) : DkWidget(parent) {
+DkBatchWidget::DkBatchWidget(const QString& currentDirectory, QWidget* parent /* = 0 */) : DkFadeWidget(parent) {
 	
 	mCurrentDirectory = currentDirectory;
 	mBatchProcessing = new DkBatchProcessing(DkBatchConfig(), this);
@@ -2808,10 +2835,11 @@ void DkBatchWidget::saveProfile(const QString & profilePath) const {
 	//	return;
 	//}
 
-	if (bc.getProcessFunctions().empty()) {
-		QMessageBox::information(DkUtils::getMainWindow(), tr("Save Profile"), tr("Cannot save empty profile."));
-		return;
-	}
+	// allow saving without functions (i.e. image conversions)
+	//if (bc.getProcessFunctions().empty()) {
+	//	QMessageBox::information(DkUtils::getMainWindow(), tr("Save Profile"), tr("Cannot save empty profile."));
+	//	return;
+	//}
 
 	if (!DkBatchProfile::saveProfile(profilePath, bc)) {
 		QMessageBox::critical(DkUtils::getMainWindow(), tr("Error"), tr("Sorry, I cannot save the settings..."));
@@ -2827,13 +2855,14 @@ void DkBatchWidget::loadProfile(const QString & profilePath) {
 
 	DkBatchConfig bc = DkBatchProfile::loadProfile(profilePath);
 
-	if (bc.getProcessFunctions().empty()) {
-		
-		QMessageBox::critical(DkUtils::getMainWindow(), 
-			tr("Error Loading Profile"), 
-			tr("Sorry, I cannot load batch settings from: \n%1").arg(profilePath));
-		return;
-	}
+	// allow loading without functions (i.e. image conversions)
+	//if (bc.getProcessFunctions().empty()) {
+	//	
+	//	QMessageBox::critical(DkUtils::getMainWindow(), 
+	//		tr("Error Loading Profile"), 
+	//		tr("Sorry, I cannot load batch settings from: \n%1").arg(profilePath));
+	//	return;
+	//}
 
 	applyDefault();
 

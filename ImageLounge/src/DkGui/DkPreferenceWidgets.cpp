@@ -63,7 +63,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 namespace nmc {
 
-DkPreferenceWidget::DkPreferenceWidget(QWidget* parent) : DkWidget(parent) {
+DkPreferenceWidget::DkPreferenceWidget(QWidget* parent) : DkFadeWidget(parent) {
 
 	createLayout();
 
@@ -231,7 +231,7 @@ QIcon DkPreferenceTabWidget::icon() const {
 }
 
 // DkGroupWidget --------------------------------------------------------------------
-DkGroupWidget::DkGroupWidget(const QString& title, QWidget* parent) : QWidget(parent) {
+DkGroupWidget::DkGroupWidget(const QString& title, QWidget* parent) : DkWidget(parent) {
 
 	setObjectName("DkGroupWidget");
 	mTitle = title;
@@ -276,7 +276,7 @@ void DkGroupWidget::paintEvent(QPaintEvent *event) {
 }
 
 // DkGeneralPreference --------------------------------------------------------------------
-DkGeneralPreference::DkGeneralPreference(QWidget* parent) : QWidget(parent) {
+DkGeneralPreference::DkGeneralPreference(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);
@@ -289,12 +289,13 @@ void DkGeneralPreference::createLayout() {
 	QStringList themes = tm.cleanThemeNames(tm.getAvailableThemes());
 
 	QComboBox* themeBox = new QComboBox(this);
+	themeBox->setView(new QListView());
 	themeBox->setObjectName("themeBox");
 	themeBox->addItems(themes);
 	themeBox->setCurrentText(tm.cleanThemeName(tm.getCurrentThemeName()));
 	connect(themeBox, SIGNAL(currentIndexChanged(int)), this, SLOT(showRestartLabel()));
 
-	DkColorChooser* iconColorChooser = new DkColorChooser(QColor(50, 50, 50, 255), tr("Icon Color"), this);
+	DkColorChooser* iconColorChooser = new DkColorChooser(QColor(51, 51, 51, 255), tr("Icon Color"), this);
 	iconColorChooser->setObjectName("iconColor");
 	iconColorChooser->setColor(&DkSettingsManager::param().display().iconColor);
 	connect(iconColorChooser, SIGNAL(accepted()), this, SLOT(showRestartLabel()));
@@ -304,7 +305,7 @@ void DkGeneralPreference::createLayout() {
 	bgColorChooser->setColor(&DkSettingsManager::param().display().bgColor);
 	connect(bgColorChooser, SIGNAL(accepted()), this, SLOT(showRestartLabel()));
 
-	DkColorChooser* fullscreenColorChooser = new DkColorChooser(QColor(86,86,90), tr("Fullscreen Color"), this);
+	DkColorChooser* fullscreenColorChooser = new DkColorChooser(QColor(51, 51, 51), tr("Fullscreen Color"), this);
 	fullscreenColorChooser->setObjectName("fullscreenColor");
 	fullscreenColorChooser->setColor(&DkSettingsManager::param().slideShow().backgroundColor);
 	connect(fullscreenColorChooser, SIGNAL(accepted()), this, SLOT(showRestartLabel()));
@@ -420,6 +421,7 @@ void DkGeneralPreference::createLayout() {
 
 	// language
 	QComboBox* languageCombo = new QComboBox(this);
+	languageCombo->setView(new QListView());	// fix style
 	languageCombo->setObjectName("languageCombo");
 	languageCombo->setToolTip(tr("Choose your preferred language."));
 	DkUtils::addLanguages(languageCombo, mLanguages);
@@ -471,6 +473,7 @@ void DkGeneralPreference::on_iconColor_resetClicked() const {
 void DkGeneralPreference::on_themeBox_currentIndexChanged(const QString& text) const {
 
 	QString tn = text + ".css";
+	tn = tn.replace(" ", "-");
 
 	if (DkSettingsManager::param().display().themeName != tn) {
 		DkSettingsManager::param().display().themeName = tn;
@@ -641,7 +644,7 @@ void DkGeneralPreference::paintEvent(QPaintEvent *event) {
 }
 
 // DkDisplaySettings --------------------------------------------------------------------
-DkDisplayPreference::DkDisplayPreference(QWidget* parent) : QWidget(parent) {
+DkDisplayPreference::DkDisplayPreference(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);
@@ -677,12 +680,36 @@ void DkDisplayPreference::createLayout() {
 	sbInterpolation->setMaximum(10000);
 	sbInterpolation->setValue(DkSettingsManager::param().display().interpolateZoomLevel);
 
+	// zoom levels
+	DkZoomConfig& zc = DkZoomConfig::instance();
+	QCheckBox* useZoomLevels = new QCheckBox(tr("Use Fixed Zoom Levels"), this);
+	useZoomLevels->setObjectName("useZoomLevels");
+	useZoomLevels->setToolTip(tr("If checked, predefined zoom levels are used when zooming."));
+	useZoomLevels->setChecked(zc.useLevels());
+
+	mZoomLevelsEdit = new QLineEdit(this);
+	mZoomLevelsEdit->setObjectName("zoomLevels");
+	mZoomLevelsEdit->setText(zc.levelsToString());
+
+	QPushButton* zoomLevelsDefaults = new QPushButton(tr("Load Defaults"), this);
+	zoomLevelsDefaults->setObjectName("zoomLevelsDefault");
+
+	mZoomLevels = new QWidget(this);
+
+	QHBoxLayout* zll = new QHBoxLayout(mZoomLevels);
+	zll->addWidget(mZoomLevelsEdit);
+	zll->addWidget(zoomLevelsDefaults);
+	
+	mZoomLevels->setEnabled(zc.useLevels());
+
 	DkGroupWidget* zoomGroup = new DkGroupWidget(tr("Zoom"), this);
 	zoomGroup->addWidget(invertZoom);
 	zoomGroup->addWidget(hQAntiAliasing);
 	zoomGroup->addWidget(showScrollBars);
 	zoomGroup->addWidget(interpolationLabel);
 	zoomGroup->addWidget(sbInterpolation);
+	zoomGroup->addWidget(useZoomLevels);
+	zoomGroup->addWidget(mZoomLevels);
 
 	// keep zoom radio buttons
 	QVector<QRadioButton*> keepZoomButtons;
@@ -727,6 +754,7 @@ void DkDisplayPreference::createLayout() {
 	QLabel* fadeImageLabel = new QLabel(tr("Image Transition"), this);
 
 	QComboBox* cbTransition = new QComboBox(this);
+	cbTransition->setView(new QListView());	// fix style
 	cbTransition->setObjectName("transition");
 	cbTransition->setToolTip(tr("Choose a transition when loading a new image"));
 
@@ -805,6 +833,7 @@ void DkDisplayPreference::createLayout() {
 
 	layout->addWidget(leftWidget);
 	layout->addWidget(rightWidget);
+	layout->addStretch();
 }
 
 void DkDisplayPreference::on_interpolationBox_valueChanged(int value) const {
@@ -889,6 +918,27 @@ void DkDisplayPreference::on_showScrollBars_toggled(bool checked) const {
 		DkSettingsManager::param().display().showScrollBars = checked;
 }
 
+void DkDisplayPreference::on_useZoomLevels_toggled(bool checked) const {
+
+	DkZoomConfig::instance().setUseLevels(checked);
+	mZoomLevels->setEnabled(checked);
+
+}
+
+void DkDisplayPreference::on_zoomLevels_editingFinished() const {
+
+	DkZoomConfig& zc = DkZoomConfig::instance();
+	if (!zc.setLevels(mZoomLevelsEdit->text()))
+		mZoomLevelsEdit->setText(zc.levelsToString());
+
+}
+
+void DkDisplayPreference::on_zoomLevelsDefault_clicked() const {
+
+	DkZoomConfig::instance().setLevelsToDefault();
+	mZoomLevelsEdit->setText(DkZoomConfig::instance().levelsToString());
+}
+
 void DkDisplayPreference::paintEvent(QPaintEvent *event) {
 
 	// fixes stylesheets which are not applied to custom widgets
@@ -901,7 +951,7 @@ void DkDisplayPreference::paintEvent(QPaintEvent *event) {
 }
 
 // DkDummySettings --------------------------------------------------------------------
-DkFilePreference::DkFilePreference(QWidget* parent) : QWidget(parent) {
+DkFilePreference::DkFilePreference(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);
@@ -953,8 +1003,7 @@ void DkFilePreference::createLayout() {
 	DkGroupWidget* historyGroup = new DkGroupWidget(tr("History Size"), this);
 	historyGroup->addWidget(historyBox);
 	historyGroup->addWidget(hLabel);
-
-
+	
 	// loading policy
 	QVector<QRadioButton*> loadButtons;
 	loadButtons.append(new QRadioButton(tr("Skip Images"), this));
@@ -975,6 +1024,28 @@ void DkFilePreference::createLayout() {
 	loadGroup->addWidget(loadButtons[0]);
 	loadGroup->addWidget(loadButtons[1]);
 
+	// save policy
+	QVector<QRadioButton*> saveButtons;
+	saveButtons.append(new QRadioButton(tr("Load Saved Images"), this));
+	saveButtons[0]->setToolTip(tr("After saving, the saved image will be loaded in place"));
+	saveButtons.append(new QRadioButton(tr("Load to Tab"), this));
+	saveButtons[1]->setToolTip(tr("After saving, the saved image will be loaded to a tab."));
+	saveButtons.append(new QRadioButton(tr("Do Nothing"), this));
+	saveButtons[2]->setToolTip(tr("The saved image will not be loaded."));
+
+	// check wrt the current settings
+	saveButtons[DkSettingsManager::param().resources().loadSavedImage]->setChecked(true);
+
+	QButtonGroup* saveButtonGroup = new QButtonGroup(this);
+	saveButtonGroup->setObjectName("saveGroup");
+
+	DkGroupWidget* saveGroup = new DkGroupWidget(tr("Image Saving Policy"), this);
+	
+	for (int idx = 0; idx < saveButtons.size(); idx++) {
+		saveButtonGroup->addButton(saveButtons[idx], idx);
+		saveGroup->addWidget(saveButtons[idx]);
+	}
+
 	// skip images
 	QSpinBox* skipBox = new QSpinBox(this);
 	skipBox->setObjectName("skipBox");
@@ -993,6 +1064,7 @@ void DkFilePreference::createLayout() {
 	leftLayout->addWidget(cacheGroup);
 	leftLayout->addWidget(historyGroup);
 	leftLayout->addWidget(loadGroup);
+	leftLayout->addWidget(saveGroup);
 	leftLayout->addWidget(skipGroup);
 
 	QHBoxLayout* layout = new QHBoxLayout(this);
@@ -1003,11 +1075,11 @@ void DkFilePreference::createLayout() {
 void DkFilePreference::on_dirChooser_directoryChanged(const QString& dirPath) const {
 
 	bool dirExists = QDir(dirPath).exists();
-	DkSettingsManager::param().global().useTmpPath = dirExists;
 
-	if (DkSettingsManager::param().global().tmpPath != dirPath && dirExists) {
+	if (DkSettingsManager::param().global().tmpPath != dirPath && dirExists)
 		DkSettingsManager::param().global().tmpPath = dirPath;
-	}
+	else if (!dirExists)
+		DkSettingsManager::param().global().tmpPath = "";
 
 }
 
@@ -1015,6 +1087,13 @@ void DkFilePreference::on_loadGroup_buttonClicked(int buttonId) const {
 
 	if (DkSettingsManager::param().resources().waitForLastImg != (buttonId == 1))
 		DkSettingsManager::param().resources().waitForLastImg = (buttonId == 1);
+
+}
+
+void DkFilePreference::on_saveGroup_buttonClicked(int buttonId) const {
+
+	if (DkSettingsManager::param().resources().loadSavedImage != buttonId)
+		DkSettingsManager::param().resources().loadSavedImage = buttonId;
 
 }
 
@@ -1053,7 +1132,7 @@ void DkFilePreference::paintEvent(QPaintEvent *event) {
 }
 
 // DkFileAssocationsSettings --------------------------------------------------------------------
-DkFileAssociationsPreference::DkFileAssociationsPreference(QWidget* parent) : QWidget(parent) {
+DkFileAssociationsPreference::DkFileAssociationsPreference(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);
@@ -1092,17 +1171,27 @@ void DkFileAssociationsPreference::createLayout() {
 	filterTableView->resizeRowsToContents();
 	filterTableView->setWordWrap(false);
 
-	QPushButton* openDefault = new QPushButton(tr("Set as Default Viewer"), this);
-	openDefault->setObjectName("openDefault");
-
 	// now the final widgets
 	QVBoxLayout* layout = new QVBoxLayout(this);
 	layout->addWidget(filterTableView);
 
 #ifdef Q_OS_WIN
-	layout->addWidget(openDefault);
-#else
-	openDefault->hide();
+
+	QPushButton* assocFiles = new QPushButton(tr("Set File Associations"), this);
+	assocFiles->setObjectName("associateFiles");
+
+	QPushButton* openDefault = new QPushButton(tr("Set as Default Viewer"), this);
+	openDefault->setObjectName("openDefault");
+
+	QWidget* bw = new QWidget(this);
+	QHBoxLayout* l = new QHBoxLayout(bw);
+
+	l->setContentsMargins(0, 0, 0, 0);
+	l->addWidget(openDefault);
+	l->addWidget(assocFiles);
+	l->addStretch();
+
+	layout->addWidget(bw);
 #endif
 
 }
@@ -1117,6 +1206,12 @@ void DkFileAssociationsPreference::on_openDefault_clicked() const {
 	
 	DkFileFilterHandling fh;
 	fh.showDefaultSoftware();
+}
+
+void DkFileAssociationsPreference::on_associateFiles_clicked() {
+	
+	mSaveSettings = true;
+	emit infoSignal(tr("Please Restart nomacs to apply changes"));
 }
 
 bool DkFileAssociationsPreference::checkFilter(const QString& cFilter, const QStringList& filters) const {
@@ -1208,7 +1303,7 @@ void DkFileAssociationsPreference::paintEvent(QPaintEvent *event) {
 }
 
 // DkAdvancedSettings --------------------------------------------------------------------
-DkAdvancedPreference::DkAdvancedPreference(QWidget* parent) : QWidget(parent) {
+DkAdvancedPreference::DkAdvancedPreference(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);
@@ -1247,7 +1342,7 @@ void DkAdvancedPreference::createLayout() {
 	// file loading
 	QCheckBox* cbSaveDeleted = new QCheckBox(tr("Ask to Save Deleted Files"), this);
 	cbSaveDeleted->setObjectName("saveDeleted");
-	cbSaveDeleted->setToolTip(tr("If checked, nomacs asked to save files which were deleted by other applications"));
+	cbSaveDeleted->setToolTip(tr("If checked, nomacs asks to save files which were deleted by other applications"));
 	cbSaveDeleted->setChecked(DkSettingsManager::param().global().askToSaveDeletedFiles);
 
 	QCheckBox* cbIgnoreExif = new QCheckBox(tr("Ignore Exif Orientation when Loading"), this);
@@ -1367,7 +1462,7 @@ void DkAdvancedPreference::paintEvent(QPaintEvent *event) {
 }
 
 // DkEditorPreference --------------------------------------------------------------------
-DkEditorPreference::DkEditorPreference(QWidget* parent) : QWidget(parent) {
+DkEditorPreference::DkEditorPreference(QWidget* parent) : DkWidget(parent) {
 
 	createLayout();
 	QMetaObject::connectSlotsByName(this);
@@ -1404,6 +1499,9 @@ void DkEditorPreference::changeSetting(const QString& key, const QVariant& value
 
 	DefaultSettings settings;
 	DkSettingsWidget::changeSetting(settings, key, value, groups);
+
+	// update values
+	nmc::DkSettingsManager::instance().param().load();
 }
 
 void DkEditorPreference::removeSetting(const QString& key, const QStringList& groups) const {

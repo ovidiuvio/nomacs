@@ -50,14 +50,15 @@
 namespace nmc {
 
 // DkControlWidget --------------------------------------------------------------------
-DkControlWidget::DkControlWidget(DkViewPort *parent, Qt::WindowFlags flags) : QWidget(parent, flags) {
+DkControlWidget::DkControlWidget(DkViewPort *parent, Qt::WindowFlags flags) : DkWidget(parent, flags) {
 
 	mViewport = parent;
 	setObjectName("DkControlWidget");
 
 	// cropping
+	// TODO: add lazy initialization here
 	mCropWidget = new DkCropWidget(QRectF(), this);
-
+	
 	// thumbnails, metadata
 	mFilePreview = new DkFilePreview(this, flags);
 	mMetaDataInfo = new DkMetaDataHUD(this);
@@ -255,7 +256,6 @@ void DkControlWidget::init() {
 	//spinnerLabel->show();
 	
 	show();
-	//thumbWidget->setVisible(true);
 }
 
 void DkControlWidget::connectWidgets() {
@@ -276,8 +276,8 @@ void DkControlWidget::connectWidgets() {
 	connect(mZoomWidget->getOverview(), SIGNAL(sendTransformSignal()), mViewport, SLOT(tcpSynchronize()));
 
 	// zoom widget
-	connect(mZoomWidget, SIGNAL(zoomSignal(float)), mViewport, SLOT(zoomTo(float)));
-	connect(mViewport, SIGNAL(zoomSignal(float)), mZoomWidget, SLOT(updateZoom(float)));
+	connect(mZoomWidget, SIGNAL(zoomSignal(double)), mViewport, SLOT(zoomTo(double)));
+	connect(mViewport, SIGNAL(zoomSignal(double)), mZoomWidget, SLOT(updateZoom(double)));
 
 	// waiting
 	connect(mDelayedInfo, SIGNAL(infoSignal(const QString&, int)), this, SLOT(setInfo(const QString&, int)));
@@ -387,7 +387,7 @@ void DkControlWidget::showPreview(bool visible) {
 	if (visible && !mFilePreview->isVisible())
 		mFilePreview->show();
 	else if (!visible && mFilePreview->isVisible())
-		mFilePreview->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the mViewport
+		mFilePreview->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the viewport
 }
 
 void DkControlWidget::showScroller(bool visible) {
@@ -398,7 +398,7 @@ void DkControlWidget::showScroller(bool visible) {
 	if (visible && !mFolderScroll->isVisible())
 		mFolderScroll->show();
 	else if (!visible && mFolderScroll->isVisible())
-		mFolderScroll->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the mViewport
+		mFolderScroll->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the viewport
 }
 
 void DkControlWidget::showMetaData(bool visible) {
@@ -411,7 +411,7 @@ void DkControlWidget::showMetaData(bool visible) {
 		qDebug() << "showing metadata...";
 	}
 	else if (!visible && mMetaDataInfo->isVisible())
-		mMetaDataInfo->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the mViewport
+		mMetaDataInfo->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the viewport
 }
 
 void DkControlWidget::showFileInfo(bool visible) {
@@ -424,7 +424,7 @@ void DkControlWidget::showFileInfo(bool visible) {
 		mRatingLabel->block(mFileInfoLabel->isVisible());
 	}
 	else if (!visible && mFileInfoLabel->isVisible()) {
-		mFileInfoLabel->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the mViewport
+		mFileInfoLabel->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the viewport
 		mRatingLabel->block(false);
 	}
 }
@@ -437,7 +437,7 @@ void DkControlWidget::showPlayer(bool visible) {
 	if (visible)
 		mPlayer->show();
 	else
-		mPlayer->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the mViewport
+		mPlayer->hide(!mViewport->getImage().isNull());	// do not save settings if we have no image in the viewport
 }
 
 void DkControlWidget::startSlideshow(bool start) {
@@ -573,8 +573,6 @@ bool DkControlWidget::closePlugin(bool askForSaving, bool force) {
 			qDebug() << "[DkControlWidget] I cannot close a plugin if the image container is NULL";
 	}
 
-	disconnect(vPlugin->getViewPort(), SIGNAL(showToolBar(QToolBar*, bool)), vPlugin->getMainWindow(), SLOT(showToolBar(QToolBar*, bool)));
-
 	setPluginWidget(vPlugin, true);
 	plugin->setActive(false);		// handles states
 
@@ -687,32 +685,32 @@ void DkControlWidget::setInfoDelayed(const QString& msg, bool start, int delayTi
 
 void DkControlWidget::changeMetaDataPosition(int pos) {
 
-	if (pos == DkWidget::pos_west) {
+	if (pos == DkFadeWidget::pos_west) {
 		mHudLayout->addWidget(mMetaDataInfo, top_metadata, left_metadata, bottom_metadata-top_metadata, 1);	
 	}
-	else if (pos == DkWidget::pos_east) {
+	else if (pos == DkFadeWidget::pos_east) {
 		mHudLayout->addWidget(mMetaDataInfo, top_metadata, right_metadata, bottom_metadata-top_metadata, 1);	
 	}
-	else if (pos == DkWidget::pos_north) {
+	else if (pos == DkFadeWidget::pos_north) {
 		mHudLayout->addWidget(mMetaDataInfo, top_metadata, left_metadata, 1, hor_pos_end-2);	
 	}
-	else if (pos == DkWidget::pos_south) {
+	else if (pos == DkFadeWidget::pos_south) {
 		mHudLayout->addWidget(mMetaDataInfo, bottom_metadata, left_metadata, 1, hor_pos_end-2);	
 	}
 }
 
 void DkControlWidget::changeThumbNailPosition(int pos) {
 
-	if (pos == DkWidget::pos_west) {
+	if (pos == DkFadeWidget::pos_west) {
 		mHudLayout->addWidget(mFilePreview, top_thumbs, left_thumbs, ver_pos_end, 1);	
 	}
-	else if (pos == DkWidget::pos_east) {
+	else if (pos == DkFadeWidget::pos_east) {
 		mHudLayout->addWidget(mFilePreview, top_thumbs, right_thumbs, ver_pos_end, 1);	
 	}
-	else if (pos == DkWidget::pos_north) {
+	else if (pos == DkFadeWidget::pos_north) {
 		mHudLayout->addWidget(mFilePreview, top_thumbs, left_thumbs, 1, hor_pos_end);	
 	}
-	else if (pos == DkWidget::pos_south) {
+	else if (pos == DkFadeWidget::pos_south) {
 		mHudLayout->addWidget(mFilePreview, bottom_thumbs, left_thumbs, 1, hor_pos_end);	
 	}
 	else 
